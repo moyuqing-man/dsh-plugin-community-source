@@ -114,7 +114,7 @@ export async function checkPublish(root = dirname(fileURLToPath(import.meta.url)
   }
   if (!pkg.engines || !pkg.engines.node) notes.push('没有声明 engines.node')
   if (!pkg.repository) {
-    notes.push('没有 repository 字段（npm 页面上看不到源码入口）—— 源码托管到哪里只有作者能定，见 PUBLISHING.md')
+    notes.push('没有 repository 字段（npm 页面上看不到源码入口）—— 源码托管到哪里只有作者能定')
   }
 
   /* ----------------------------- 2. 零运行时依赖 ----------------------------- */

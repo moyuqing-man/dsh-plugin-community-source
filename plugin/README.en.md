@@ -5,6 +5,14 @@ GitHub Issues into a bug-report inbox, and stars into a rating.
 
 > 中文版见 [README.md](./README.md)。
 
+> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete and all 153 tests pass, but
+> three things have **not been verified in a real environment yet**: the tool cards (they need a real DSH
+> with this plugin installed), the `dsh.so` / `dsh.works` / Lanshu index sources (unreachable from the
+> development machine, so only their parsing logic was tested against offline fixtures), and the actual
+> npm packing result. Sign-in additionally requires you to register your own GitHub OAuth App and put its
+> Client ID into the config. Fine to evaluate and play with; **not recommended for anything that depends
+> on it yet**.
+
 This package has **two halves**:
 
 - **the host half** (`lib/index.js`) — mounts two routes (one HTML page for humans, one JSON API for
@@ -299,8 +307,9 @@ Every index source's `parse()` is a pure function tested against offline fixture
 The client half is tested by swapping `globalThis.window.__ModuleLoader__` and capturing the bundle,
 so it needs **no browser** either.
 
-To cut a release, see [`PUBLISHING.md`](./PUBLISHING.md) (Chinese only for now): the check script
-tells you exactly which files would ship and how npm computes `files`.
+The release procedure is **not part of this repository** (it is the maintainer's own notes).
+The check script `node scripts/pack-check.mjs` tells you exactly which files would ship and how npm
+computes `files`.
 
 ## License
 

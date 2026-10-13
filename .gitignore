@@ -8,6 +8,9 @@
 # 内部工作稿（M0 之外的一次性产物）
 .tmp-asar.mjs
 
+# 发布到 npm 的操作备忘：写给自己看的，不随仓库公开
+/plugin/PUBLISHING.md
+
 # Node
 node_modules/
 npm-debug.log*

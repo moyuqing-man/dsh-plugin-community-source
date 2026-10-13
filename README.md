@@ -4,7 +4,9 @@
 > 本方案不做第 N 个插件市场，而做**市场之上的那一层**——讨论、信任、沉淀与协作。
 > 社区本身是一个 DSH 插件，但它的本质是**一个「联合其他插件的联合插件」**：不重复收录，只桥接与组织。
 
-> **仓库**：源码与这 8 份方案文档 → `moyuqing-man/dsh-plugin-community-source`（本地就是这个目录）；社区仓库（Discussions 分类 / Issue 与讨论表单 / 行为准则）→ `moyuqing-man/dsh-plugin-community`（本地是 [`m0/community-repo/`](m0/community-repo/README.md)）。两个仓库各自独立推送，发布步骤见 [plugin/PUBLISHING.md](plugin/PUBLISHING.md)。
+> **仓库**：源码与这 8 份方案文档 → `moyuqing-man/dsh-plugin-community-source`（本地就是这个目录）；社区仓库（Discussions 分类 / Issue 与讨论表单 / 行为准则）→ `moyuqing-man/dsh-plugin-community`（本地是 [`m0/community-repo/`](m0/community-repo/README.md)）。两个仓库各自独立推送。
+
+> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、153 个测试全绿，但工具卡片、三个新索引源、npm 真实打包结果都还没在真实环境验证过；登录也需要自己配 Client ID。详见 [plugin/README.md](plugin/README.md) 开头的说明。
 
 ---
 

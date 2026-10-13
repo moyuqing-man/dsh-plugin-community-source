@@ -4,6 +4,12 @@
 
 > English version: [README.en.md](./README.en.md)
 
+> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、153 个测试全绿，但有三处**还没在真实环境里验证过**：
+> 工具卡片（需要一台装了本插件的 DSH 真机跑一次）、`dsh.so` / `dsh.works` / 岚叔目录三个索引源
+> （开发机连不上它们，只用离线 fixture 测过解析逻辑）、以及 npm 上的真实打包结果。
+> 登录功能还需要你自己申请一个 GitHub OAuth App、把 Client ID 填进配置才能用。
+> 适合评估与试玩，**不建议现在就拿去撑依赖它的流程**。
+
 这个包有**两个半边**：
 
 - **host 半边**（`lib/index.js`）——挂两条路由（一个给人看的页面、一个给程序看的 JSON API），
@@ -263,8 +269,8 @@ GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启�
 索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网。
 client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bundle 截下来跑，**也不需要浏览器**。
 
-要发版的话看 [`PUBLISHING.md`](./PUBLISHING.md)（英文版暂无）：
-自检脚本会告诉你哪些文件真的会进包，以及 npm 会怎么算 `files`。
+发版流程的说明**不在这个仓库里**（它是维护者自己的备忘，没有随仓库公开）。
+自检脚本 `node scripts/pack-check.mjs` 会告诉你哪些文件真的会进包，以及 npm 会怎么算 `files`。
 
 ## 许可证
 
