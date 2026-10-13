@@ -68,6 +68,24 @@ git push -u origin main
 
 第一次 `git push` 会弹一次浏览器，让你授权 GitHub（Git for Windows 自带的凭据管理器；你机器上 GitHub Desktop 3.6.3 已装、Git 全局身份已经是 `moyuqing-man <3538481552@qq.com>`，直接确认即可）。推完之后，这两个目录也能在 GitHub Desktop 里用「File → Add local repository」加进来做图形化管理。
 
+### 建仓库时直接粘：About 描述与 Topics
+
+GitHub 的仓库描述**带不上去**——`git push` 只推文件，About 与 Topics 只能用网页或 API 设置。所以建仓库时一起填掉最省事，下面是写好的文案。
+
+**`dsh-plugin-community-source`**（源码 + 方案文档）
+
+- **Description**
+  > DSH 插件社区：把 GitHub Discussions 变成插件讨论区、Issues 变成 bug 汇报入口、Stars 变成评分，插件详情页里就能看到社区在说什么。纯 JS、零原生依赖。 / A community layer for DSH plugins — discussions, bug inbox and ratings, right inside the plugin detail page.
+- **Topics**：`dsh` `dsh-plugin` `deepseek-harness` `plugin-community` `github-discussions`
+
+**`dsh-plugin-community`**（社区仓库）
+
+- **Description**
+  > DSH 插件社区的讨论与反馈入口：插件展示 / 求助 / 想法与需求 / 已知问题。**本仓库不含任何可执行代码**（见 SECURITY.md）。 / Discussion and feedback hub for the DSH plugin community. Contains no executable code.
+- **Topics**：`dsh` `dsh-plugin` `deepseek-harness` `community` `discussions`
+
+两处 Description 都控制在 350 字符以内（GitHub 的上限）。npm 包自身的 `description` 已经写在 `package.json` 里，是中英双语，不用重复填。
+
 ---
 
 ## 2. 首次发布（🧑 = 需要你的账号）
