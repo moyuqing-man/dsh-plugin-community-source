@@ -1,0 +1,44 @@
+# dsh-plugin-community 的 cordis 补丁
+#
+# profile 根目录的 cordis.yml 内容是 `[]`，注释明确写着「Edit cordis.patch.yml, not this file.」
+# 所以插件只能靠这个文件插进层栈，改 cordis.yml 会被覆盖。
+#
+# 下面 config 里的每一项都可以在这里直接改；改完重启 DSH 生效。
+
+- insert:
+    - id: dsh-plugin-community
+      name: 'dsh-plugin-community'
+      config:
+        # 社区 Discussions 所在的仓库。换成你自己的组织/仓库只需要改这两行。
+        owner: 'moyuqing-man'
+        repo: 'dsh-plugin-community'
+        # 独立页面（/community）是否允许非本机访问。
+        # false = 只有本机能打开；手机要通过局域网/中继访问时必须改成 true。
+        allowRemote: false
+        # 索引缓存时长（分钟）。外部抓取失败时超过 TTL 仍会返回旧数据并标记 stale。
+        cacheTtlMinutes: 60
+        # 索引源。'awesome' 内容最全但很慢（实测冷启动 30 秒级），
+        # 'github-topic' 很快（1 秒内）但只有 GitHub topic 收录的那部分。
+        sources:
+          - 'github-topic'
+          - 'awesome'
+        # GitHub OAuth App 的 Client ID（公开值，不是密钥）。
+        # 留空 = 登录功能关闭，页面只读；填上才能登录、发帖、评论。
+        #
+        # 怎么拿（六步，全程在你自己的浏览器里）：
+        #   1. 打开 https://github.com/settings/developers
+        #   2. 点 "New OAuth App"
+        #   3. Application name 随便写，例如 DSH 插件社区
+        #   4. Homepage URL 随便写，例如 http://127.0.0.1:3221
+        #   5. Authorization callback URL **必须填**，但 Device Flow 用不到它，
+        #      填上面的地址即可（GitHub 的必填项，留空不让保存）
+        #   6. 创建后进这个 App 的设置，**务必勾上 "Enable Device Flow"**
+        #      —— 不勾的话设备码请求会直接返回 device_flow_disabled
+        #
+        # 然后把 Client ID 粘到下面。**不要**把 Client Secret 放到这里：
+        # Device Flow 不需要它，任何地方都不需要它。
+        clientId: ''
+        # 申请的权限。'read:user' 只是读昵称头像；
+        # 'public_repo' 是公开仓库发帖/评论/投票所必需的最小权限。
+        # 不要改成 'repo'——那是私有仓库权限，比需要的宽得多。
+        scope: 'read:user public_repo'

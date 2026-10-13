@@ -1,0 +1,11 @@
+# 仓库里所有文本文件在 Git 中统一存成 LF。
+#
+# 不加这行的话，Windows 上的 Git 默认会把工作区的换行改成 CRLF，
+# 于是「别人克隆下来看到一次全文件 diff」——对纯 JS 包来说纯属噪音。
+* text=auto eol=lf
+
+# 二进制，别做任何换行/编码处理
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary

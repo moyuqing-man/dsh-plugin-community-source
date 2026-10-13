@@ -1,0 +1,44 @@
+{
+  "name": "awesome-dsh-plugin",
+  "url": "https://awesome-dsh-plugin.com",
+  "source": "https://github.com/hnjm/awesome-dsh-plugin",
+  "updated": "2026-10-13T00:00:00Z",
+  "count": 3,
+  "categories": {
+    "ui": { "en": "UI", "zh": "界面" },
+    "tools": { "en": "Tools", "zh": "工具" }
+  },
+  "plugins": [
+    {
+      "name": "dsh-j-space",
+      "owner": "AnonyJcy",
+      "url": "https://github.com/AnonyJcy/dsh-j-space",
+      "page": "https://awesome-dsh-plugin.com/#dsh-j-space",
+      "category": "ui",
+      "description": { "en": "A panel plugin", "zh": "一个面板插件" },
+      "npm": "@anonyjcy/dsh-j-space",
+      "version": "1.0.0",
+      "stars": 4,
+      "downloads": 1982,
+      "capabilities": ["添加自定义面板"],
+      "capabilityRedLines": ["不联网"],
+      "install": "dsh plugin --profile web add @anonyjcy/dsh-j-space",
+      "added": "2026-09-01"
+    },
+    {
+      "name": "not-a-github-entry",
+      "owner": "nobody",
+      "url": "https://example.com/notgithub",
+      "category": "tools",
+      "description": { "en": "should be dropped" }
+    },
+    {
+      "name": "dsh-x",
+      "owner": "Someone",
+      "url": "https://github.com/Someone/dsh-x",
+      "category": "tools",
+      "description": { "en": "Another one" },
+      "stars": 10
+    }
+  ]
+}

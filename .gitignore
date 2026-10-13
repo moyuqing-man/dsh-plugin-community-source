@@ -1,0 +1,20 @@
+# 这是一个「文档 + 源码」仓库，仓库根就在本目录。
+#
+# m0/community-repo/ 是**另一个独立的 git 仓库**（社区仓库），
+# 它的 .git 就在那个子目录里。两个仓库并排放着，但各推各的，
+# 所以这里必须排除掉，否则会变成嵌套仓库（gitlink），推上去是个空的子模块。
+/m0/community-repo/
+
+# 内部工作稿（M0 之外的一次性产物）
+.tmp-asar.mjs
+
+# Node
+node_modules/
+npm-debug.log*
+*.tgz
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,6 @@
+{
+  "clientId": "在此填 OAuth App 的 Client ID",
+  "scope": "read:user public_repo",
+  "repo": "your-name/dsh-plugin-community",
+  "categoryName": "General"
+}

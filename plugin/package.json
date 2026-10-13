@@ -1,0 +1,59 @@
+{
+  "name": "dsh-plugin-community",
+  "version": "0.1.0",
+  "description": "DSH 插件社区：把 GitHub Discussions 变成插件的讨论区、把 Issues 变成 bug 汇报入口、把 Stars 变成评分。插件详情页里就能看到社区在说什么。/ A community layer for DSH plugins: GitHub Discussions as the discussion board, Issues as the bug inbox, stars as the rating — visible right inside the plugin detail page.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moyuqing-man/dsh-plugin-community-source.git",
+    "directory": "plugin"
+  },
+  "homepage": "https://github.com/moyuqing-man/dsh-plugin-community-source#readme",
+  "bugs": {
+    "url": "https://github.com/moyuqing-man/dsh-plugin-community-source/issues"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "community",
+    "discussions",
+    "plugin-ecosystem"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
