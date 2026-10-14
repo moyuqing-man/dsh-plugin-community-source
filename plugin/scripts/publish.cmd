@@ -171,8 +171,15 @@ popd & exit /b %errorlevel%
 :runcheck
 rem NOTE: no pushd/popd here -- this is a `call`ed subroutine, the caller owns
 rem the working directory. Popping here would pop the caller's pushd too.
+rem
+rem --test-reporter=tap is deliberate. The default reporter prints "tests 193"
+rem with a leading U+2139 and no "#" prefix, so BOTH findstr patterns below
+rem (^# tests / ^not ok) would silently match nothing -- you would lose the
+rem summary and, worse, see an empty list of failures. TAP is plain ASCII and
+rem is what these patterns were written against. Verified with real cmd
+rem redirection: the file starts with the bytes 54 41 50 ("TAP").
 "%NODE_EXE%" "%SCRIPT_DIR%pack-check.mjs" || exit /b 1
-"%NODE_EXE%" --test "test/*.test.mjs" >"%TEMP%\dcom-test.txt" 2>&1
+"%NODE_EXE%" --test --test-reporter=tap "test/*.test.mjs" >"%TEMP%\dcom-test.txt" 2>&1
 if errorlevel 1 (
   echo [x] Tests failed:
   findstr /R /C:"^not ok" "%TEMP%\dcom-test.txt"
