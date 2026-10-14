@@ -5,16 +5,18 @@ GitHub Issues into a bug-report inbox, and stars into a rating.
 
 > 中文版见 [README.md](./README.md)。
 
-> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete, all 220 tests pass, and the
+> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete, all 221 tests pass, the
 > plugin **has now actually been loaded by DSH** — installed from a real tarball into a throwaway profile
-> with `dsh plugin add` and booted, after which `/community` and `/api/v1/community/meta` both returned 200.
-> That one real-hardware run caught two bugs that the local tests were **structurally incapable of finding**;
-> see the "real-hardware verification" section below. Still **unverified**:
-> (1) the client half mounted in a real UI (the sidebar entry, the main panel and the four tool cards all
-> need a human to open them), (2) the `dsh.so` and `dsh.works` index sources (unreachable from the
-> development machine, so only their parsing logic was tested against offline fixtures — **the Lanshu
-> catalogue *was* reachable on 2026-10-14**, see "Running the parser against real data"), and (3) the actual
-> npm publish (packing is verified down to a real tgz from `pnpm pack`; one `pnpm publish` remains).
+> with `dsh plugin add` and booted, after which `/community` and `/api/v1/community/meta` both returned 200 —
+> and it **is published to npm**: `dsh-plugin-community@0.1.0`, where `dsh plugin add dsh-plugin-community`
+> was measured to download from the registry and boot. That real-hardware run caught two bugs the local tests
+> were **structurally incapable of finding**, and another four came out of running the parser against
+> **655 real catalogue entries**; see the "real-hardware verification" section below. Still **unverified**:
+> (1) the client half's **write paths** (posting / commenting / reacting from the panel needs a GitHub
+> sign-in) and the four tool cards (a human has to run a real tool call to see them), and (2) the `dsh.so` and
+> `dsh.works` index sources (unreachable from the development machine, so only their parsing logic was tested
+> against offline fixtures — **the Lanshu catalogue *was* reachable on 2026-10-14**, see "Running the parser
+> against real data").
 > Sign-in additionally requires you to register your own GitHub OAuth App and put its Client ID into the
 > config. Fine to evaluate and play with; **not recommended for anything that depends on it yet**.
 
@@ -56,7 +58,7 @@ cannot be installed, and pulling in a build tool just to ship would add CI depen
 | **Author profile page** `/community/u?login=` | ✅ works (REST-backed, **readable while logged out**) |
 | **Index ranking work** (`sort=smart`: framework repos and aggregator lists are ranked down) | ✅ works |
 | Agent tools (`community_search` and 3 more) | ✅ registered |
-| Publish to npm | 🟡 packing verified (30 files / 104.9 KB), **one signed-in publish away** (the credential steps are yours) |
+| Publish to npm | ✅ published `dsh-plugin-community@0.1.0` (30 files / 343.9 KB unpacked; `dsh plugin add dsh-plugin-community` installs) |
 
 **When `clientId` is not configured it neither crashes nor pretends to be able to log you in**: the
 page spells out the setup steps (5 of them, and step 4 — "tick Enable Device Flow" — is the one
@@ -405,7 +407,7 @@ to `目录审核未通过：发现动态代码执行入口；发现递归删除�
 ## Development
 
 ```bash
-node --test "test/*.test.mjs"           # 220 tests
+node --test "test/*.test.mjs"           # 221 tests
 node scripts/pack-check.mjs             # pre-publish check: pack list + relative-import graph + manifest fields
 node scripts/verify-tarball.mjs [tgz]   # stronger: unpack a real tgz and actually import + apply it once
 ```
@@ -436,7 +438,7 @@ always in the package), and **tarball verification** (parsing `cordis.patch.yml`
 boolean types / every parsed key must match a `Config` key in `lib/index.js` / the workspace imports
 and applies, registering 4 routes and 4 tools).
 
-**220 tests** in total.
+**221 tests** in total.
 
 Every index source's `parse()` is a pure function tested against offline fixtures — no network needed
 (the Lanshu source was additionally checked against 655 **real** entries, see "Running the parser against

@@ -6,7 +6,7 @@
 
 > **仓库**：源码与这 8 份方案文档 → `moyuqing-man/dsh-plugin-community-source`（本地就是这个目录）；社区仓库（Discussions 分类 / Issue 与讨论表单 / 行为准则）→ `moyuqing-man/dsh-plugin-community`（本地是 [`m0/community-repo/`](m0/community-repo/README.md)）。两个仓库各自独立推送。
 
-> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、220 个测试全绿，打包路径真机走通了（`pnpm pack` → 真实 tgz → 解包后 import + apply 成功，4 条路由与 4 个 Agent 工具都注册得上），**并且已经真的被 DSH 装载起来过**——在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与 `/api/v1/community/meta` 都返回 200，启动日志零告警。这一轮真机验证抓出了两个本地测试**结构上不可能发现**的 bug（`Config` 必须实现 Standard Schema、`ctx` 是 Proxy 所以未 inject 的服务访问会抛错），已修并加了变异测试守住；随后用岚叔目录的 **655 条真实数据**跑解析器，又抓出 4 个 bug（其中一个判据**反了**，把上游评为最好的条目涂成红线），修正后红线从 528+ 条降到 43 条。详见 [docs/07-路线图与验收.md](docs/07-路线图与验收.md) 第 6、7 条与「诚实保留」第 2 条。仍然**没有在真实环境验证过**的是：① client 半边在真实界面里的挂载（侧栏图标 / 主面板 / 四个工具卡片要有人在界面上点开看），② 真机上的工具卡片，③ `dsh.so` 与 `dsh.works` 两个可选索引源（本机连不上，只有岚叔目录连上过），④ client 半边新增的**面板内发帖 / 评论 / 点赞**（宿主接口已线下验证，client 侧渲染没有），⑤ npm 上的真实发布（打包已验证，差一次 `pnpm publish`）。登录也需要自己配 Client ID。详见 [plugin/README.md](plugin/README.md) 开头的说明。
+> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、221 个测试全绿，打包路径真机走通了（`pnpm pack` → 真实 tgz → 解包后 import + apply 成功，4 条路由与 4 个 Agent 工具都注册得上），**并且已经真的被 DSH 装载起来过**——在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与 `/api/v1/community/meta` 都返回 200，启动日志零告警。**它也已经发布到 npm**：[`dsh-plugin-community@0.1.0`](https://www.npmjs.com/package/dsh-plugin-community)，并且实测 `dsh plugin add dsh-plugin-community` 能直接从 registry 装上并启动（同样的 200）。这一轮真机验证抓出了两个本地测试**结构上不可能发现**的 bug（`Config` 必须实现 Standard Schema、`ctx` 是 Proxy 所以未 inject 的服务访问会抛错），已修并加了变异测试守住；随后用岚叔目录的 **655 条真实数据**跑解析器，又抓出 4 个 bug（其中一个判据**反了**，把上游评为最好的条目涂成红线），修正后红线从 528+ 条降到 43 条。详见 [docs/07-路线图与验收.md](docs/07-路线图与验收.md) 第 6、7 条与「诚实保留」第 2 条。仍然**没有在真实环境验证过**的是：① client 半边的**写路径**（面板内发帖 / 评论 / 点赞的提交，需要 GitHub 登录态），② 真机上的工具卡片（要有人在真实会话里跑一次工具调用），③ `dsh.so` 与 `dsh.works` 两个可选索引源（本机连不上，只有岚叔目录连上过）。登录也需要自己配 Client ID。详见 [plugin/README.md](plugin/README.md) 开头的说明。
 
 ---
 
@@ -39,7 +39,7 @@
 | [08-GitHub-API-契约](docs/08-GitHub-API-契约.md) | **实测**：哪些免登录能读、哪些必须要 token、限额卡在哪、POC 怎么跑 |
 | [poc/ 验证器](poc/README.md) | **可执行**：一条命令把 08 的每条结论复现成证据（POC-0/1/2/3/4/6） |
 | [m0/ 启动包](m0/README.md) | **可交付**：M0 验证结论 + 可直接推上 GitHub 的社区仓库地基（分类 / 表单 / 首发帖） |
-| [plugin/ 插件本体](plugin/README.md) | **可运行且已真机装载过**：M1 + M2 + M3 + M4 已跑通——多源索引（6 个源，默认开 2 个）、**索引质量治理**（`sort=smart` 把框架本体与聚合清单降级，`?sort=stars` 仍是纯 star 排序）、`/community` 页面（关掉 JS 也能看，带类型/分类/排序 chips）、**作者资料页** `/community/u?login=`、`/api/v1/community/*` JSON API、缓存与陈旧降级、GitHub Device Flow 登录与发帖/评论/表态/单帖读取、**client 半边七个座位**（侧栏入口 / 主面板**双页签含发帖·评论·点赞** / 插件详情页区块与标签 / 设置页 / 登录浮层 / 4 个 Agent 工具的自定义卡片）、**中英双语**（`?lang=` + 设置页可切换）；**220 个测试全绿**；英文版见 [plugin/README.en.md](plugin/README.en.md) |
+| [plugin/ 插件本体](plugin/README.md) | **可运行、已真机装载、已发布到 npm**（[`dsh-plugin-community@0.1.0`](https://www.npmjs.com/package/dsh-plugin-community)）：M1 + M2 + M3 + M4 已跑通——多源索引（6 个源，默认开 2 个）、**索引质量治理**（`sort=smart` 把框架本体与聚合清单降级，`?sort=stars` 仍是纯 star 排序）、`/community` 页面（关掉 JS 也能看，带类型/分类/排序 chips）、**作者资料页** `/community/u?login=`、`/api/v1/community/*` JSON API、缓存与陈旧降级、GitHub Device Flow 登录与发帖/评论/表态/单帖读取、**client 半边七个座位**（侧栏入口 / 主面板**双页签含发帖·评论·点赞** / 插件详情页区块与标签 / 设置页 / 登录浮层 / 4 个 Agent 工具的自定义卡片）、**中英双语**（`?lang=` + 设置页可切换）；**221 个测试全绿**；英文版见 [plugin/README.en.md](plugin/README.en.md) |
 
 ---
 

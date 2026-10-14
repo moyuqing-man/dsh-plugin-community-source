@@ -4,14 +4,16 @@
 
 > English version: [README.en.md](./README.en.md)
 
-> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、220 个测试全绿，**并且已经真的被 DSH 装载过**
-> （在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与
-> `/api/v1/community/meta` 都返回 200）—— 这一轮真机验证抓出了两个本地测试**结构上不可能发现**的
-> bug，详见下文「真机验证」一节。仍然**没验证过**的是：
-> ① client 半边在真实界面里的挂载（侧栏图标 / 主面板 / 四个工具卡片都要有人在界面上点开看），
+> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、221 个测试全绿，**已经真的被 DSH 装载过**
+> （隔离 profile 里 `dsh plugin add` 后启动，`/community` 与 `/api/v1/community/meta` 都返回 200），
+> **也已经发布到 npm**：`dsh-plugin-community@0.1.0`，`dsh plugin add dsh-plugin-community` 实测能从
+> registry 下载、装上、跑起来。这一轮真机验证抓出了两个本地测试**结构上不可能发现**的 bug，另有 4 个
+> bug 是用岚叔目录 **655 条真实数据**跑解析器跑出来的，详见下文「真机验证」一节。
+> 仍然**没验证过**的是：
+> ① client 半边的**写路径**（面板内发帖 / 评论 / 点赞的提交需要 GitHub 登录态）与四个工具卡片
+> （要有人在真实会话里跑一次工具调用才看得到），
 > ② `dsh.so` 与 `dsh.works` 两个索引源（开发机连不上，只用离线 fixture 测过解析逻辑；**岚叔目录
-> 在 2026-10-14 连上过，见下文「用真实数据跑一遍解析器」**），
-> ③ npm 上的真实发布结果（打包已验证到 `pnpm pack` 产出的真实 tgz，差一次 `pnpm publish`）。
+> 在 2026-10-14 连上过，见下文「用真实数据跑一遍解析器」**）。
 > 登录功能还需要你自己申请一个 GitHub OAuth App、把 Client ID 填进配置才能用。
 > 适合评估与试玩，**不建议现在就拿去撑依赖它的流程**。
 
@@ -50,7 +52,7 @@
 | **作者资料页** `/community/u?login=` | ✅ 可用（走 REST，**未登录也能看**） |
 | **索引质量治理**（`sort=smart`：降级框架本体与聚合清单） | ✅ 可用 |
 | Agent 工具（`community_search` 等 4 个） | ✅ 已注册 |
-| 发布到 npm | 🟡 打包已验证（30 文件 / 104.9 KB），**差一次登录发布**（凭据步骤归你） |
+| 发布到 npm | ✅ 已发布 `dsh-plugin-community@0.1.0`（30 文件 / 343.9 KB 解包后；`dsh plugin add dsh-plugin-community` 实测可装） |
 
 **没配 `clientId` 时不会崩，也不会假装能登录**：页面会直接列出开通步骤（5 步，
 其中第 4 步「勾 Enable Device Flow」最容易漏），API 则返回 `503 NOT_CONFIGURED`。
@@ -360,7 +362,7 @@ npm 名从 131 涨到 606，`blocked` 条目的红线文本从 `目录审核：b
 ## 开发
 
 ```bash
-node --test "test/*.test.mjs"           # 220 个测试
+node --test "test/*.test.mjs"           # 221 个测试
 node scripts/pack-check.mjs             # 发布前自检：打包清单 + 相对 import 图 + 清单字段
 node scripts/verify-tarball.mjs [tgz]   # 更强的一步：从真实 tgz 解包并真的 import + apply 一次
 ```
@@ -387,7 +389,7 @@ GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启�
 块序列与布尔类型 / 解析出的键必须与 `lib/index.js` 的 `Config` 对得上 /
 从工作区能 import + apply 并注册出 4 条路由与 4 个工具）。
 
-一共 **220 个测试**。
+一共 **221 个测试**。
 
 索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网（岚叔那份额外用 655 条**真实
 响应**复核过一遍，见上文「用真实数据跑一遍解析器」）。
