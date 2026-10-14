@@ -4,12 +4,13 @@
 
 > English version: [README.en.md](./README.en.md)
 
-> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、207 个测试全绿，**并且已经真的被 DSH 装载过**
+> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、220 个测试全绿，**并且已经真的被 DSH 装载过**
 > （在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与
 > `/api/v1/community/meta` 都返回 200）—— 这一轮真机验证抓出了两个本地测试**结构上不可能发现**的
 > bug，详见下文「真机验证」一节。仍然**没验证过**的是：
 > ① client 半边在真实界面里的挂载（侧栏图标 / 主面板 / 四个工具卡片都要有人在界面上点开看），
-> ② `dsh.so` / `dsh.works` / 岚叔目录三个索引源（开发机连不上它们，只用离线 fixture 测过解析逻辑），
+> ② `dsh.so` 与 `dsh.works` 两个索引源（开发机连不上，只用离线 fixture 测过解析逻辑；**岚叔目录
+> 在 2026-10-14 连上过，见下文「用真实数据跑一遍解析器」**），
 > ③ npm 上的真实发布结果（打包已验证到 `pnpm pack` 产出的真实 tgz，差一次 `pnpm publish`）。
 > 登录功能还需要你自己申请一个 GitHub OAuth App、把 Client ID 填进配置才能用。
 > 适合评估与试玩，**不建议现在就拿去撑依赖它的流程**。
@@ -263,7 +264,8 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
   `dsh-plugin`，外加发了一个 npm 包——也就是说「有 npm 包」这个信号可以被没有 DSH 专属功能的
   项目满足。同类还有 `volcengine/OpenViking`、`Tencent/WeKnora`（带 topic 的通用 AI 项目）。
   没改判据，是因为「怎么判断一个仓库真的是 DSH 插件」需要比 topic 更硬的数据源
-  （上游目录的收录、README 里的安装上下文），而那三个上游本机连不上。
+  （上游目录的收录、README 里的安装上下文），而这类数据默认源里没有
+  （岚叔目录连上过，但它明确标注 `curated 203 / autoDiscovered 452`，收录本身也不等于「是 DSH 插件」）。
   在那之前，页面底部那句「按原样提供，未做人工审核」就是这条排序的边界。
 - **未认证配额是硬墙**：`api.github.com` 每小时 60 次、search 桶每分钟 10 次（按出口 IP 计）。
   所以列表页只吃索引源、只有详情页才补实时元数据——否则 30 条卡片就能打光一小时配额。
@@ -328,12 +330,34 @@ curl http://127.0.0.1:3309/api/v1/community/meta     :: 期望 200
 - `test/guards.test.mjs` 用**变异测试**证明上面两条守卫真的有牙：把两个 bug 人为还原回去，
   断言守卫确实报警。只验证通过路径的守卫是装饰，不是守卫。
 
+### 用真实数据跑一遍解析器（抓出 4 个真 bug）
+
+上面那条教训的推论是：**只要拿得到真响应，就该拿真响应跑一遍解析器**。2026-10-14 岚叔目录
+`https://dsh.lanshuagent.com/api/plugins` 恰好连上了（此前一直超时），拿到 **655 条真实数据**，
+离线 fixture 与它一比，抓出 3 个 bug —— 其中第一个是**判据反了**：
+
+| # | bug | 真实数据说了什么 | 后果 |
+|---|---|---|---|
+| 1 | 红线用白名单反推（`BENIGN_SCREENING = ['pass','ok','pending']`） | 真实取值是 `clear 61 / review 467 / pending 105 / blocked 22` —— 白名单里**既没有 `blocked` 也没有 `clear`** | 上游结论**最好**的 61 条被挂上「目录审核：clear」红线，全库 **528+ 条被涂红**；修后降到 **43 条**（= `blocked` 22 与 `caution` 32 的并集） |
+| 2 | 只从 `installCommand` 取 npm 名 | 655 条里**只有 131 条**有安装命令（且全是 `github:owner/repo#sha`，推不出 npm 名），另有 **475 条只有 `manifest.packageName`** | 475 条的 npm 名是空的，而 `?pkg=`（拿 npm 包名反查仓库）正是靠这个字段工作；修后 **606/655** 条有 npm 名 |
+| 3 | 只报 `screening.state` 这个枚举名 | 上游的 `findings` 自带**中英双语 label**（`发现动态代码执行入口`…） | 详情页只说「目录审核未通过」，用户不知道到底哪里不安全；现在列出 `high` 级说明（超过 4 项截断并注明还有几项），而 `medium` 级（1181 次，几乎是所有插件的常态）不进红线 |
+| 4 | （顺带查出的同族问题）`dshSo.js` 把 `riskNote` **同时**推进 `capabilities` 与 `capabilityRedLines` | 代码自己的注释写着「只把真的危险放进红线」，实现却两边都放 | `capabilities` 在详情页的标题是「**它能做什么**」——把「严重风险」写在「它能做什么」底下，等于把警告伪装成功能说明 |
+
+修完把真实数据整个跑了一遍：**655 条全部解析成功、0 条被跳过**，红线从 528+ 降到 43，
+npm 名从 131 涨到 606，`blocked` 条目的红线文本从 `目录审核：blocked` 变成
+`目录审核未通过：发现动态代码执行入口；发现递归删除或直接删除文件的调用`。这些都加进了
+`test/sources.test.mjs`（该文件现在 23 项），用的全是上游真实取值。
+
+> `dsh.so` 与 `dsh.works` 两个源**仍然连不上**（当天独立进程各试一次，都是 10.7 s 后
+> `fetch failed`），所以它们的解析逻辑还是照上游公布的形状写的。`dshWorks.js` 复核过没有
+> 第 4 类问题；`dshSo.js` 的问题已修并补了 3 项测试。**等哪天能联网，应该像岚叔这样再核一遍。**
+
 ---
 
 ## 开发
 
 ```bash
-node --test "test/*.test.mjs"           # 207 个测试
+node --test "test/*.test.mjs"           # 220 个测试
 node scripts/pack-check.mjs             # 发布前自检：打包清单 + 相对 import 图 + 清单字段
 node scripts/verify-tarball.mjs [tgz]   # 更强的一步：从真实 tgz 解包并真的 import + apply 一次
 ```
@@ -360,9 +384,10 @@ GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启�
 块序列与布尔类型 / 解析出的键必须与 `lib/index.js` 的 `Config` 对得上 /
 从工作区能 import + apply 并注册出 4 条路由与 4 个工具）。
 
-一共 **207 个测试**。
+一共 **220 个测试**。
 
-索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网。
+索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网（岚叔那份额外用 655 条**真实
+响应**复核过一遍，见上文「用真实数据跑一遍解析器」）。
 client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bundle 截下来跑，**也不需要浏览器**。
 
 发版流程的说明**不在这个仓库里**（它是维护者自己的备忘，没有随仓库公开）。

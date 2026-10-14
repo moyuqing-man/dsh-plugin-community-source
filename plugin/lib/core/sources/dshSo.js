@@ -61,8 +61,10 @@ export function parse(body) {
     const riskLevel = str(entry.security?.riskLevel).toLowerCase()
     const riskNote = RISK_NOTES[riskLevel]
 
+    // 风险只能出现在**红线**里（见下面的 capabilityRedLines），不能同时进
+    // `capabilities` —— 后者在详情页渲染成「它能做什么」，把「严重风险」写在
+    // 「它能做什么」底下，是把警告伪装成了功能。
     const capabilities = []
-    if (riskNote) capabilities.push(riskNote)
     const level = str(entry.verification?.level)
     if (level) capabilities.push(`dsh.so 验证等级：${level}`)
     const securityStatus = str(entry.security?.status)

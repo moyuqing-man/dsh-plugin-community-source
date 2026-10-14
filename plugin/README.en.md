@@ -5,14 +5,15 @@ GitHub Issues into a bug-report inbox, and stars into a rating.
 
 > 中文版见 [README.md](./README.md)。
 
-> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete, all 207 tests pass, and the
+> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete, all 220 tests pass, and the
 > plugin **has now actually been loaded by DSH** — installed from a real tarball into a throwaway profile
 > with `dsh plugin add` and booted, after which `/community` and `/api/v1/community/meta` both returned 200.
 > That one real-hardware run caught two bugs that the local tests were **structurally incapable of finding**;
 > see the "real-hardware verification" section below. Still **unverified**:
 > (1) the client half mounted in a real UI (the sidebar entry, the main panel and the four tool cards all
-> need a human to open them), (2) the `dsh.so` / `dsh.works` / Lanshu index sources (unreachable from the
-> development machine, so only their parsing logic was tested against offline fixtures), and (3) the actual
+> need a human to open them), (2) the `dsh.so` and `dsh.works` index sources (unreachable from the
+> development machine, so only their parsing logic was tested against offline fixtures — **the Lanshu
+> catalogue *was* reachable on 2026-10-14**, see "Running the parser against real data"), and (3) the actual
 > npm publish (packing is verified down to a real tgz from `pnpm pack`; one `pnpm publish` remains).
 > Sign-in additionally requires you to register your own GitHub OAuth App and put its Client ID into the
 > config. Fine to evaluate and play with; **not recommended for anything that depends on it yet**.
@@ -297,7 +298,9 @@ A few deliberate decisions:
   satisfied by a project with nothing DSH-specific in it. Same story for `volcengine/OpenViking` and
   `Tencent/WeKnora` (general AI projects carrying the topic). The criteria were not changed, because
   telling a real DSH plugin apart needs a harder source than a topic (upstream catalogue inclusion,
-  the install context in a README) and those three upstreams are unreachable from this machine.
+  the install context in a README) and no default source offers one — the Lanshu catalogue *was*
+  reachable, but it labels itself `curated 203 / autoDiscovered 452`, so inclusion alone still does not
+  mean "is a DSH plugin".
   Until then, the line at the bottom of the page — "provided as-is with no human review" — is the
   honest boundary of this ordering.
 - **The unauthenticated quota is a hard wall**: `api.github.com` allows 60 requests per hour and
@@ -369,12 +372,36 @@ and *submitting* a post / comment / reaction needs `clientId` plus a live sign-i
 > Do not use `--dump-dom`: it hangs under `--headless=new` and returns pre-render DOM under
 > `--headless=old`. What is needed is post-render runtime state, which means **CDP**.
 
+### Running the parser against real data (it caught 4 real bugs)
+
+The corollary of the lesson above is: **whenever the real response is reachable, run the parser against
+it.** On 2026-10-14 the Lanshu catalogue at `https://dsh.lanshuagent.com/api/plugins` happened to come
+back (it had always timed out before), yielding **655 real entries**. Comparing those against the offline
+fixture caught 3 bugs — the first of which had the **criterion inverted**:
+
+| # | Bug | What the real data said | Impact |
+|---|---|---|---|
+| 1 | red lines were derived from an allow-list (`BENIGN_SCREENING = ['pass','ok','pending']`) | the real values are `clear 61 / review 467 / pending 105 / blocked 22` — the allow-list contained **neither `blocked` nor `clear`** | the 61 entries upstream rated **best** got a red line reading `目录审核：clear`, painting **528+ of 655 entries red**; after the fix: **43** (= the union of `blocked` 22 and `caution` 32) |
+| 2 | npm name taken only from `installCommand` | only **131 of 655** entries have an install command (all `github:owner/repo#sha`, which yields no npm name), while **475 have only `manifest.packageName`** | 475 entries lost their npm name — the very field `?pkg=` (reverse lookup by npm package) depends on; after the fix **606/655** have one |
+| 3 | only the `screening.state` enum name was surfaced | upstream `findings` carry **bilingual labels** (`发现动态代码执行入口` = dynamic code execution) | the detail page said only "screening failed" with no indication of what is unsafe; it now lists the `high`-severity labels (truncated past 4 with a count), while `medium` findings (1,181 occurrences — near-universal, not a warning) stay out |
+| 4 | (found while auditing siblings) `dshSo.js` pushed `riskNote` into **both** `capabilities` and `capabilityRedLines` | the code's own comment says "only genuine danger goes into red lines" | `capabilities` renders under the heading **"What it does"** — putting "severe risk" there dresses a warning up as a feature |
+
+Re-running the whole real payload after the fix: **all 655 entries parse, 0 skipped**, red lines down from
+528+ to 43, npm names up from 131 to 606, and a `blocked` entry's red line changed from `目录审核：blocked`
+to `目录审核未通过：发现动态代码执行入口；发现递归删除或直接删除文件的调用`. All of this is pinned in
+`test/sources.test.mjs` (now 23 tests), using real upstream values throughout.
+
+> `dsh.so` and `dsh.works` are **still unreachable** (one separate process each that day, both
+> `fetch failed` after 10.7 s), so their parsing logic remains written against the documented shapes.
+> `dshWorks.js` was audited and does not have bug 4; `dshSo.js` did, is fixed, and gained 3 tests.
+> **When the network allows, audit them the way Lanshu was audited.**
+
 ---
 
 ## Development
 
 ```bash
-node --test "test/*.test.mjs"           # 207 tests
+node --test "test/*.test.mjs"           # 220 tests
 node scripts/pack-check.mjs             # pre-publish check: pack list + relative-import graph + manifest fields
 node scripts/verify-tarball.mjs [tgz]   # stronger: unpack a real tgz and actually import + apply it once
 ```
@@ -405,9 +432,11 @@ always in the package), and **tarball verification** (parsing `cordis.patch.yml`
 boolean types / every parsed key must match a `Config` key in `lib/index.js` / the workspace imports
 and applies, registering 4 routes and 4 tools).
 
-**207 tests** in total.
+**220 tests** in total.
 
-Every index source's `parse()` is a pure function tested against offline fixtures — no network needed.
+Every index source's `parse()` is a pure function tested against offline fixtures — no network needed
+(the Lanshu source was additionally checked against 655 **real** entries, see "Running the parser against
+real data" above).
 The client half is tested by swapping `globalThis.window.__ModuleLoader__` and capturing the bundle,
 so it needs **no browser** either.
 
