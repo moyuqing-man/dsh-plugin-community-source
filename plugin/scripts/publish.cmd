@@ -17,6 +17,8 @@ rem  Usage:  scripts\publish.cmd            (full: checks + tests + publish)
 rem          scripts\publish.cmd check      (checks + tests only, no publish)
 rem          scripts\publish.cmd login      (log in to the registry)
 rem          scripts\publish.cmd whoami     (show the signed-in account)
+rem          scripts\publish.cmd publish 123456
+rem                                       (publish with a one-time 2FA code)
 rem ---------------------------------------------------------------------------
 setlocal
 set "SCRIPT_DIR=%~dp0"
@@ -99,6 +101,14 @@ rem ------------------------------- publish ----------------------------------
 call :runcheck
 if errorlevel 1 (popd & exit /b 1)
 
+rem Optional 2nd argument = one-time code, e.g. "publish 123456".
+rem Needed when the npm account has 2FA set to "authorization and writes":
+rem without a code the registry answers
+rem   403 Two-factor authentication ... is required to publish packages.
+rem (Measured on 2026-10-15 with `pnpm login` credentials on this machine.)
+set "OTP_ARG="
+if not "%~2"=="" set "OTP_ARG=--otp=%~2"
+
 echo.
 echo === checking the signed-in account ===
 "%NODE_EXE%" "%PNPM_MJS%" whoami >nul 2>&1
@@ -141,20 +151,53 @@ echo.
 echo === publishing dsh-plugin-community to https://registry.npmjs.org/ ===
 echo     This is irreversible for this version number.
 echo.
-"%NODE_EXE%" "%PNPM_MJS%" publish --access public
-if errorlevel 1 (
+rem Capture the output so the failure branch can tell the failure modes apart
+rem by what the registry actually said, instead of listing every possibility.
+"%NODE_EXE%" "%PNPM_MJS%" publish --access public %OTP_ARG% >"%TEMP%\dcom-publish.txt" 2>&1
+set "PUB_RC=%errorlevel%"
+type "%TEMP%\dcom-publish.txt"
+if not "%PUB_RC%"=="0" (
   echo.
-  echo [x] Publish failed. Common causes:
-  echo       - EOTP          wrong / expired one-time code
-  echo       - E409 / E403   this version already exists ^(bump the version^)
-  echo       - E404          not authenticated ^(see the login step above^)
-  popd & exit /b 1
+  findstr /I /C:"two-factor" "%TEMP%\dcom-publish.txt" >nul
+  if not errorlevel 1 goto :need2fa
+  goto :pubfail
 )
+del "%TEMP%\dcom-publish.txt" 2>nul
 echo.
 echo [ok] published. Verify with:
 echo        "%SCRIPT_DIR%publish.cmd" whoami
 echo        https://www.npmjs.com/package/dsh-plugin-community
 popd & exit /b 0
+
+:need2fa
+del "%TEMP%\dcom-publish.txt" 2>nul
+echo [x] The registry wants a one-time 2FA code for this publish.
+echo     Nothing was published; version 0.1.0 is still free.
+echo.
+echo     Two ways out:
+echo.
+echo     1. Re-run with a fresh code -- open your authenticator first, the code
+echo        lives ~30 seconds and the checks above already ran:
+echo.
+echo            "%SCRIPT_DIR%publish.cmd" publish 123456
+echo.
+echo     2. Stop needing a code every time. Create a granular access token at
+echo        https://www.npmjs.com/settings/~/tokens with "Bypass 2FA" enabled,
+echo        then:
+echo.
+echo            pnpm config set //registry.npmjs.org/:_authToken ^<token^>
+echo.
+echo        ^(Classic "Automation" tokens bypass 2FA too, but npm is retiring
+echo        them, so prefer the granular one.^)
+popd & exit /b 1
+
+:pubfail
+del "%TEMP%\dcom-publish.txt" 2>nul
+echo [x] Publish failed. Common causes:
+echo       - EOTP          wrong / expired one-time code
+echo       - E409 / E403   this version already exists ^(bump the version^)
+echo       - E404          not authenticated ^(see the login step above^)
+popd & exit /b 1
 
 rem ------------------------------- sub-actions ------------------------------
 :login
