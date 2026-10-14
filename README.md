@@ -108,3 +108,14 @@
 - **要评估可行性** → [03](docs/03-插件实现规格.md)（契约是否够用）+ [06](docs/06-手机端兼容.md)（手机端是否真能跑）
 - **要评估工作量** → [02](docs/02-总体架构.md) 第 6 节 + [07](docs/07-路线图与验收.md)
 - **要开始动手** → [03](docs/03-插件实现规格.md) + [05](docs/05-界面与交互设计.md) + [07](docs/07-路线图与验收.md)
+
+---
+
+## 7. 许可证
+
+[MIT](LICENSE)，© 2026 moyuqing-man。方案文档、POC 脚本与插件本体同一个许可证。
+
+插件本体（[`plugin/`](plugin/README.md)）另有一份同样的 [`plugin/LICENSE`](plugin/LICENSE)，
+因为它会被单独发到 npm，而 npm 包只会带上自己目录内的文件。
+社区仓库（`m0/community-repo/` → `moyuqing-man/dsh-plugin-community`）也放了同样的 [LICENSE](m0/community-repo/LICENSE)——它是独立仓库，许可证不会跟着父目录走。
+
