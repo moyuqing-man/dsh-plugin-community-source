@@ -94,6 +94,9 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 
 然后重启 DSH，访问 `http://127.0.0.1:<端口>/community`。
 
+本包在 `package.json` 的 `dsh.compatibility` 里声明了兼容范围：DSH `>=0.2.0-rc.2`、Node `>=22`、`profiles: ["web"]`。
+真机装载并跑通的是 **DSH 0.2.0-rc.2（桌面版）**；`>=` 的上界是空的，也就是说更高版本没有被声称过一定可用。
+
 ---
 
 ## 配置

@@ -103,6 +103,10 @@ After installing into a profile, add a block to `cordis.patch.yml` (or just take
 
 Then restart DSH and open `http://127.0.0.1:<port>/community`.
 
+This package declares its compatibility range in `dsh.compatibility`: DSH `>=0.2.0-rc.2`, Node `>=22`,
+`profiles: ["web"]`. The version actually loaded and exercised on a real DSH is **0.2.0-rc.2 (desktop)**;
+the `>=` has no upper bound, so it does not claim that later releases will work.
+
 ---
 
 ## Configuration

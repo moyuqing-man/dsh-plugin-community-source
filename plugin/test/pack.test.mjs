@@ -79,6 +79,27 @@ test('repository 指向源码仓库，并且说明了包在子目录里', () => 
   assert.match(report.pkg.bugs.url, /^https:\/\/github\.com\/moyuqing-man\/dsh-plugin-community-source\/issues$/)
 })
 
+test('dsh.compatibility 声明了兼容范围 —— 目录/市场读它，缺了只会显示「未声明」', () => {
+  const dsh = report.pkg.dsh
+  assert.ok(dsh, '没有 dsh 字段就不是 DSH 插件')
+  assert.equal(dsh.bundle.patch, './cordis.patch.yml')
+  assert.equal(dsh.client.platform, 'web')
+
+  // 起因：一次目录提交回执里 declaredCompatibility 是 "not stated"。
+  // 不是缺陷，但我们确实从没在任何地方声明过兼容的 DSH 版本 ——
+  // 真机跑通过的是 0.2.0-rc.2（桌面版），那就把它写下来。
+  const compat = dsh.compatibility
+  assert.ok(compat, 'dsh.compatibility 缺失，目录会显示成「未声明」')
+  assert.equal(compat.dsh, '>=0.2.0-rc.2', '兼容范围的下界必须是真的验证过的那个版本')
+  assert.equal(compat.dshReleases['0.2.0-rc.2'], 'compatible', '真机验证过的版本要写进 dshReleases')
+  assert.ok(Array.isArray(compat.profiles), 'profiles 要是数组')
+  assert.ok(compat.profiles.includes('web'), 'client 半边是 web only')
+
+  // 顶层 engines.node 与 dsh.compatibility.node 说的是同一件事，
+  // 漂移了会让人不知道该信哪个 —— 所以钉住它们相等。
+  assert.equal(compat.node, report.pkg.engines.node)
+})
+
 test('设计文档不会被打包 —— 它们是给人看的，不是给 npm 的', () => {
   // docs/ 与 plugin/ 在同一个仓库里（源码仓库），一旦有人图省事把它加进
   // package.json 的 files，几百 KB 的中文方案文档就跟着包发到 npm 了。

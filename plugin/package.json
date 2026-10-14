@@ -51,6 +51,16 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ],
       "platform": "web"
+    },
+    "compatibility": {
+      "dsh": ">=0.2.0-rc.2",
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible"
+      },
+      "node": ">=22",
+      "profiles": [
+        "web"
+      ]
     }
   },
   "publishConfig": {
