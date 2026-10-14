@@ -273,16 +273,21 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 
 ## 真机验证（2026-10-14，抓出两个真 bug）
 
-这个插件**已经真的被一个 DSH 进程装载过**。做法是在**隔离的临时 profile** 里做，
-不动你在用的那个（`DSH_HOME` 指到临时目录，删掉即完全回滚）：
+这个插件**已经真的被一个 DSH 进程装载过，页面也真的在浏览器里渲染出来了**。
+做法是在**隔离的临时 profile** 里做，不动你在用的那个（`DSH_HOME` 指到临时目录，删掉即完全回滚）：
 
 ```cmd
 set DSH_HOME=%TEMP%\dcom-dsh-home
+dsh --profile min --from-default-profile web         :: 这一步不能省，见下
 dsh plugin --profile min add file:<项目路径>\plugin\dsh-plugin-community-0.1.0.tgz
-dsh --profile min --port 3305 --no-open
-curl http://127.0.0.1:3305/community                 :: 期望 200
-curl http://127.0.0.1:3305/api/v1/community/meta     :: 期望 200
+dsh --profile min --port 3309 --no-open
+curl http://127.0.0.1:3309/community                 :: 期望 200
+curl http://127.0.0.1:3309/api/v1/community/meta     :: 期望 200
 ```
+
+> **`--from-default-profile web` 不能省。** 直接 `dsh --profile min` 建出来的 profile
+> 只带 `@deepseek-ai/dsh-base`，没有 `@deepseek-ai/dsh-web-app`，于是插件会停在
+> `pending (waiting for service: webServer)` —— 症状和「插件坏了」很像，但其实是环境缺服务。
 
 **第一次启动是失败的**，而且失败得很安静：启动日志只有一行 `warning: 1 entry did not activate`，
 两个路由都是 404 —— 而当时仓库里 202 个测试全绿、`pack-check.mjs` 通过、`verify-tarball.mjs` 也通过。
@@ -295,6 +300,24 @@ curl http://127.0.0.1:3305/api/v1/community/meta     :: 期望 200
 
 修完复测：`/community` → **200**（33229 字节、无 `<script>`）、`/api/v1/community/meta` → **200**，
 启动日志零告警。
+
+### client 半边也在真实页面里跑起来了
+
+用 CDP 取证（Edge `--remote-debugging-port=9223` + Node 内置 `WebSocket` 直连，
+不装 puppeteer），四层：
+
+| 层 | 证据 |
+|---|---|
+| 加载器**真的把我们的包列进去了** | 真实页面的 `<link rel="preload">` 合并 URL 里含 `dsh-plugin-community/client.js` |
+| 取回来的**就是我们写的代码** | 445831 字节的合并 bundle 里，我们那段 60505 字节与磁盘上的 `lib/client.js` **sha256 完全相同** |
+| **侧栏真的画出来了** | `button[aria-label="社区"]` 存在，里面是那个手写 svg（按 `path d="M8.6 17.2 …"` 唯一定位） |
+| **面板真的渲染 + 有活数据** | 点击后出现 40 个 `dcom-*` class；`archify ★83k` / `OpenViking ★40k` / `WeKnora ★34k` 是真从 GitHub 拉的；切到「讨论」页签给出「需要登录 GitHub」+ 登录按钮，不是空壳；控制台零 error |
+
+**还没证明的**：工具卡片要等真实会话里调一次 `community_search` 才会出现；
+发帖/评论/点赞的**提交**要 `clientId` + 登录态。
+
+> 别用 `--dump-dom`：在 `--headless=new` 下会挂住，在 `--headless=old` 下拿不到 SPA 渲染后的 DOM。
+> 要的是渲染完成后的运行时状态，**只能走 CDP**。
 
 **为什么本地测试永远抓不到这两条**：假 `ctx` 是普通对象（不会抛错），而 `apply()` 是被直接调用的
 （不经过加载器的配置解析）。所以修完代码之后，**守卫本身**也一起升级了：

@@ -310,17 +310,23 @@ A few deliberate decisions:
 
 ## Real-hardware verification (2026-10-14 — it caught two real bugs)
 
-This plugin **has now been loaded by an actual DSH process**. The run happens in a **throwaway profile**,
-leaving the one you actually use untouched (`DSH_HOME` points at a temp directory; deleting it rolls
-everything back):
+This plugin **has now been loaded by an actual DSH process, and its UI has rendered in a real browser**.
+The run happens in a **throwaway profile**, leaving the one you actually use untouched
+(`DSH_HOME` points at a temp directory; deleting it rolls everything back):
 
 ```cmd
 set DSH_HOME=%TEMP%\dcom-dsh-home
+dsh --profile min --from-default-profile web         :: do not skip this, see below
 dsh plugin --profile min add file:<project>\plugin\dsh-plugin-community-0.1.0.tgz
-dsh --profile min --port 3305 --no-open
-curl http://127.0.0.1:3305/community                 :: expect 200
-curl http://127.0.0.1:3305/api/v1/community/meta     :: expect 200
+dsh --profile min --port 3309 --no-open
+curl http://127.0.0.1:3309/community                 :: expect 200
+curl http://127.0.0.1:3309/api/v1/community/meta     :: expect 200
 ```
+
+> **`--from-default-profile web` is not optional.** A bare `dsh --profile min` produces a profile carrying
+> only `@deepseek-ai/dsh-base`, with no `@deepseek-ai/dsh-web-app`; the plugin then sits at
+> `pending (waiting for service: webServer)`. That looks like "the plugin is broken" but is really a
+> missing service in the environment.
 
 **The first boot failed, and it failed quietly**: the startup log held a single line,
 `warning: 1 entry did not activate`, and both routes returned 404 — while back in the repository all 202
@@ -344,6 +350,24 @@ code fixes, **the guards themselves** were upgraded:
   Its fake `ctx` is now a **Proxy that throws for uninjected plain properties**, matching real cordis.
 - `test/guards.test.mjs` proves those two guards bite, using **mutation testing**: it puts both bugs back
   and asserts the guards fire. A guard that only ever passes is decoration, not a guard.
+
+### The client half runs in the real page too
+
+Verified over CDP (Edge `--remote-debugging-port=9223`, Node's built-in `WebSocket`, no puppeteer),
+on four layers:
+
+| Layer | Evidence |
+|---|---|
+| the loader **really does include our package** | the real page's `<link rel="preload">` merged URL contains `dsh-plugin-community/client.js` |
+| what comes back **is our code** | inside the 445,831-byte merged bundle our 60,505-byte block is **sha256-identical** to `lib/client.js` on disk |
+| **the sidebar icon really is ours** | `button[aria-label="社区"]` exists and holds the hand-written svg (located by its unique `path d="M8.6 17.2 …"`) |
+| **the panel really renders, with live data** | after the click, 40 `dcom-*` classes are present; `archify ★83k` / `OpenViking ★40k` / `WeKnora ★34k` came back live from GitHub; the Discussions tab shows the "GitHub sign-in required" notice plus a sign-in button rather than an empty shell; zero console errors |
+
+**Still not proven**: the tool cards only appear once a real session calls `community_search`;
+and *submitting* a post / comment / reaction needs `clientId` plus a live sign-in.
+
+> Do not use `--dump-dom`: it hangs under `--headless=new` and returns pre-render DOM under
+> `--headless=old`. What is needed is post-render runtime state, which means **CDP**.
 
 ---
 
