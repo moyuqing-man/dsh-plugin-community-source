@@ -50,7 +50,7 @@ cannot be installed, and pulling in a build tool just to ship would add CI depen
 | **Author profile page** `/community/u?login=` | ✅ works (REST-backed, **readable while logged out**) |
 | **Index ranking work** (`sort=smart`: framework repos and aggregator lists are ranked down) | ✅ works |
 | Agent tools (`community_search` and 3 more) | ✅ registered |
-| Publish to npm | ⏳ one `npm publish` away (the credential steps are yours) |
+| Publish to npm | 🟡 packing verified (30 files / 104.9 KB), **one signed-in publish away** (the credential steps are yours) |
 
 **When `clientId` is not configured it neither crashes nor pretends to be able to log you in**: the
 page spells out the setup steps (5 of them, and step 4 — "tick Enable Device Flow" — is the one
@@ -338,6 +338,17 @@ so it needs **no browser** either.
 The release procedure is **not part of this repository** (it is the maintainer's own notes).
 The check script `node scripts/pack-check.mjs` tells you exactly which files would ship and how npm
 computes `files`.
+
+On this machine `node`, `npm` and `pnpm` are all absent from PATH — the only copies live inside the
+DSH runtime, which ships **no npm CLI at all**. So the repo carries a wrapper that spells the paths
+out (Chinese only for now):
+
+```cmd
+scripts\publish.cmd check     :: checks + tests, does not publish
+scripts\publish.cmd login     :: log in to the registry (needs a real interactive terminal)
+scripts\publish.cmd whoami    :: show the signed-in account
+scripts\publish.cmd           :: full run: checks -> tests -> login -> clean tree -> publish
+```
 
 ## License
 

@@ -44,7 +44,7 @@
 | **作者资料页** `/community/u?login=` | ✅ 可用（走 REST，**未登录也能看**） |
 | **索引质量治理**（`sort=smart`：降级框架本体与聚合清单） | ✅ 可用 |
 | Agent 工具（`community_search` 等 4 个） | ✅ 已注册 |
-| 发布到 npm | ⏳ 差一条 `npm publish`（凭据步骤归你） |
+| 发布到 npm | 🟡 打包已验证（30 文件 / 104.9 KB），**差一次登录发布**（凭据步骤归你） |
 
 **没配 `clientId` 时不会崩，也不会假装能登录**：页面会直接列出开通步骤（5 步，
 其中第 4 步「勾 Enable Device Flow」最容易漏），API 则返回 `503 NOT_CONFIGURED`。
@@ -295,6 +295,16 @@ client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bund
 
 发版流程的说明**不在这个仓库里**（它是维护者自己的备忘，没有随仓库公开）。
 自检脚本 `node scripts/pack-check.mjs` 会告诉你哪些文件真的会进包，以及 npm 会怎么算 `files`。
+
+本机上 `node` / `npm` / `pnpm` 都不在 PATH，只有 DSH 运行时里那一套（而且那套**没有 npm CLI**）。
+所以仓库里放了一个包装脚本，把路径拼好：
+
+```cmd
+scripts\publish.cmd check     :: 自检 + 跑测试，不发布
+scripts\publish.cmd login     :: 登录 registry（需要真实交互终端）
+scripts\publish.cmd whoami    :: 看当前登录的是谁
+scripts\publish.cmd           :: 全套：自检 → 测试 → 查登录 → 查工作区 → 发布
+```
 
 ## 许可证
 
