@@ -45,6 +45,7 @@ ul.lang a{font-size:11px;padding:2px 8px}
 ul.plugins{list-style:none;padding:0;margin:0}
 ul.plugins>li{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--card)}
 .pname{font-size:16px;font-weight:600;margin:0 0 2px;word-break:break-all}
+.avatar{width:28px;height:28px;border-radius:50%;vertical-align:-4px;margin-right:8px;background:var(--line)}
 .powner{color:var(--dim);font-size:12px;margin:0 0 6px;word-break:break-all}
 .pdesc{margin:0 0 8px}
 .meta{color:var(--dim);font-size:12px;display:flex;flex-wrap:wrap;gap:10px}
@@ -170,7 +171,7 @@ function accountNav(status, base, params, locale, T) {
 export function renderIndex({ list, config, origin, status, locale }) {
   const T = translator(locale)
   const base = `${origin}/community`
-  const params = { q: list.query, category: list.category, sort: list.sort }
+  const params = { q: list.query, category: list.category, sort: list.sort, kind: list.kind }
   const link = (extra) => `${base}${qs({ ...params, ...extra, lang: locale })}`
 
   const categoryChips = [{ slug: '', count: list.total, label: T('index.all') }].concat(
@@ -181,20 +182,42 @@ export function renderIndex({ list, config, origin, status, locale }) {
     .map((item) => {
       const on = (list.category ?? '') === item.slug ? ' class="on"' : ''
       const label = item.slug === '' ? e(T('index.all')) : e(item.label)
-      return `<li><a${on} href="${e(link({ category: item.slug }))}">${label}<span> ${item.count}</span></a></li>`
+      return `<li><a${on} href="${e(link({ category: item.slug, page: undefined }))}">${label}<span> ${item.count}</span></a></li>`
+    })
+    .join('\n')
+
+  /**
+   * 类型 chips。**顺序固定**（插件在前）而不是按数量排：
+   * 这几个标签是「解释为什么某条排得靠后」用的，位置固定才认得出。
+   */
+  const kindOrder = ['plugin', 'framework', 'aggregator', 'unknown']
+  const byKind = new Map((list.facets.kinds ?? []).map((item) => [item.kind, item.count]))
+  const kindChips = [{ kind: '', count: list.total, label: T('index.kindAll') }].concat(
+    kindOrder.map((kind) => ({
+      kind,
+      count: byKind.get(kind) ?? 0,
+      label: T(`kind.${kind}`),
+    })),
+  )
+  const kindHtml = kindChips
+    .map((item) => {
+      const on = (list.kind ?? '') === item.kind ? ' class="on"' : ''
+      return `<li><a${on} href="${e(link({ kind: item.kind, page: undefined }))}">${e(item.label)}<span> ${item.count}</span></a></li>`
     })
     .join('\n')
 
   const sorts = [
+    ['smart', 'sort.smart'],
     ['stars', 'sort.stars'],
     ['downloads', 'sort.downloads'],
     ['recent', 'sort.recent'],
     ['name', 'sort.name'],
   ]
+  const activeSort = list.sort ?? 'smart'
   const sortHtml = sorts
     .map(([key, labelKey]) => {
-      const on = (list.sort ?? 'stars') === key ? ' class="on"' : ''
-      return `<li><a${on} href="${e(link({ sort: key }))}">${e(T(labelKey))}</a></li>`
+      const on = activeSort === key ? ' class="on"' : ''
+      return `<li><a${on} href="${e(link({ sort: key, page: undefined }))}">${e(T(labelKey))}</a></li>`
     })
     .join('\n')
 
@@ -233,8 +256,9 @@ ${accountNav(status, base, params, locale, T)}
 
 <form class="bar" method="get" action="${e(base)}">
   <input type="search" name="q" value="${e(list.query)}" placeholder="${e(T('index.searchPlaceholder'))}" aria-label="${e(T('index.searchLabel'))}">
-  <input type="hidden" name="sort" value="${e(list.sort)}">
+  <input type="hidden" name="sort" value="${e(activeSort)}">
   <input type="hidden" name="category" value="${e(list.category)}">
+  <input type="hidden" name="kind" value="${e(list.kind ?? '')}">
   <input type="hidden" name="lang" value="${e(locale)}">
   <button type="submit">${e(T('index.searchButton'))}</button>
 </form>
@@ -242,8 +266,13 @@ ${accountNav(status, base, params, locale, T)}
 <h2>${e(T('index.byCategory'))}</h2>
 <ul class="chips">${chipHtml}</ul>
 
+<h2>${e(T('index.byKind'))}</h2>
+<ul class="chips">${kindHtml}</ul>
+
 <h2>${e(T('index.sort'))}</h2>
 <ul class="chips">${sortHtml}</ul>
+
+${activeSort === 'smart' ? `<div class="notice">${rich(T('index.kindTip'), {})}</div>` : ''}
 
 ${sourcesNote(list, T)}
 
@@ -265,6 +294,7 @@ ${items}
 function renderCard(card, origin, locale) {
   const T = translator(locale)
   const detail = `${origin}/community/plugin${qs({ repo: card.repo, lang: locale })}`
+  const authorPage = `${origin}/community/u${qs({ login: card.owner, lang: locale })}`
   const desc = pickLocalized(card.description, locale) || T('card.noDescription')
   const bits = []
   if (card.stars !== null && card.stars !== undefined) bits.push(`★ ${formatCount(card.stars)}`)
@@ -272,6 +302,9 @@ function renderCard(card, origin, locale) {
     bits.push(`↓ ${formatCount(card.downloads)}${e(T('card.perWeek'))}`)
   }
   if (card.category) bits.push(e(pickLocalized(card.categoryLabel, locale) || card.category))
+  // 类型标签：只有「不是普通插件」的时候才显示，否则每张卡片都挂一个「插件」等于噪音
+  const kindLabel = card.kind && card.kind !== 'plugin' ? T(`kind.${card.kind}`) : ''
+  if (kindLabel) bits.push(`<strong>${e(kindLabel)}</strong>`)
   if (card.npm) bits.push(`npm <code>${e(card.npm)}</code>`)
   if (card.version) bits.push(e(card.version))
   if (card.archived) bits.push(`<strong>${e(T('card.archived'))}</strong>`)
@@ -280,7 +313,7 @@ function renderCard(card, origin, locale) {
 
   return `<li>
   <p class="pname"><a href="${e(detail)}">${e(card.name)}</a></p>
-  <p class="powner">${e(card.owner)} · <a href="${e(safeUrl(card.url) ?? '#')}">${e(card.repo)}</a></p>
+  <p class="powner"><a href="${e(authorPage)}">${e(card.owner)}</a> · <a href="${e(safeUrl(card.url) ?? '#')}">${e(card.repo)}</a></p>
   <p class="pdesc">${e(desc)}</p>
   <p class="meta">${bits.join(' · ')}</p>
 </li>`
@@ -397,8 +430,80 @@ ${discussionBlock}
   })
 }
 
-export function renderError({ status, reason, message, origin, requestId, locale }) {
+/**
+ * 作者页（M4 新增）。
+ *
+ * 两块信息拼起来的：**GitHub 上的公开资料**（REST `/users/{login}`，未登录也能读）
+ * 加 **索引里属于他的条目**。
+ *
+ * 关键取舍：GitHub 资料读不到时**页面照样 200**，只把「为什么读不到」写清楚，
+ * 下面照样列出索引里的条目。因为「他是谁」是附加值，「他有哪些插件」才是这一页
+ * 存在的理由 —— 让整个页面因为头像拉不到就 502，是把主次搞反了。
+ */
+export function renderUser({ profile, plugins, login, origin, status, locale, reason }) {
   const T = translator(locale)
+  const base = `${origin}/community`
+  const params = { login }
+  const name = profile?.found ? profile.login : login
+  const profileUrl = safeUrl(profile?.htmlUrl) ?? `https://github.com/${encodeURIComponent(login)}`
+
+  const facts = []
+  if (profile?.found) {
+    if (profile.name) facts.push([T('user.heading'), profile.name])
+    facts.push([T('user.repos'), formatCount(profile.repos)])
+    facts.push([T('user.followers'), formatCount(profile.followers)])
+    if (profile.createdAt) facts.push([T('user.joined'), rel(profile.createdAt, locale)])
+  }
+
+  const items = plugins.length
+    ? plugins.map((card) => renderCard(card, origin, locale)).join('\n')
+    : `<li><p class="pdesc">${e(T('user.none'))}</p></li>`
+
+  const notice = profile?.found
+    ? ''
+    : reason
+      ? `<div class="notice warn">${rich(T('user.unavailable'), { reason: e(reason) })}</div>`
+      : `<div class="notice warn">${rich(T('user.notFound'), { login: e(login) })}</div>`
+
+  const avatar = profile?.found && profile.avatarUrl
+    ? `<img class="avatar" src="${e(safeUrl(profile.avatarUrl) ?? '')}" alt="" width="56" height="56">`
+    : ''
+
+  const body = `
+${langSwitcher({ locale, base, params, T })}
+
+<header class="top">
+  <p class="sub"><a href="${e(`${base}${qs({ lang: locale })}`)}">${e(T('detail.back'))}</a></p>
+  <h1>${avatar}${e(name)}</h1>
+  <p class="sub">${e(T('user.count', { count: plugins.length }))} · <a href="${e(profileUrl)}">${e(T('user.profile'))}</a></p>
+</header>
+
+${accountNav(status, base, params, locale, T)}
+
+${notice}
+${profile?.bio ? `<p class="pdesc">${e(profile.bio)}</p>` : ''}
+
+${
+  facts.length
+    ? `<table><tbody>${facts.map(([k, v]) => `<tr><th>${e(k)}</th><td>${e(String(v))}</td></tr>`).join('')}</tbody></table>`
+    : ''
+}
+
+<h2>${e(T('user.plugins'))}</h2>
+<ul class="plugins">
+${items}
+</ul>
+`
+  return shell({
+    title: T('user.title', { login: name }),
+    description: T('user.description', { login: name }),
+    body,
+    base,
+    locale,
+  })
+}
+
+export function renderError({ status, reason, message, origin, requestId, locale }) {  const T = translator(locale)
   const base = `${origin}/community`
   const body = `
 ${langSwitcher({ locale, base, params: {}, T })}

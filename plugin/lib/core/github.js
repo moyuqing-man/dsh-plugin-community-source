@@ -20,6 +20,10 @@ const GRAPHQL_ENDPOINT = `${API}/graphql`
 
 export const REPO_TTL = 30 * 60_000
 export const ISSUES_TTL = 15 * 60_000
+/** 用户资料基本不变，但头像链接会过期，给半天。 */
+export const USER_TTL = 12 * 3600_000
+/** 单条讨论（含评论）比列表变得快 —— 有人回复就该看到。 */
+export const THREAD_TTL = 3 * 60_000
 
 const DISCUSSIONS_QUERY = `query CommunityDiscussions($owner: String!, $name: String!, $first: Int!) {
   repository(owner: $owner, name: $name) {
@@ -39,6 +43,39 @@ const DISCUSSIONS_QUERY = `query CommunityDiscussions($owner: String!, $name: St
         category { name slug emoji }
         comments { totalCount }
         reactionGroups { content users { totalCount } }
+      }
+    }
+  }
+}`
+
+const THREAD_QUERY = `query CommunityThread($owner: String!, $name: String!, $number: Int!, $first: Int!) {
+  repository(owner: $owner, name: $name) {
+    discussion(number: $number) {
+      id
+      number
+      title
+      url
+      body
+      createdAt
+      updatedAt
+      isAnswered
+      locked
+      author { login avatarUrl }
+      category { name slug emoji }
+      reactionGroups { content users { totalCount } }
+      comments(first: $first) {
+        totalCount
+        nodes {
+          id
+          url
+          body
+          createdAt
+          updatedAt
+          isAnswer
+          author { login avatarUrl }
+          replyTo { id }
+          reactionGroups { content users { totalCount } }
+        }
       }
     }
   }
@@ -229,5 +266,119 @@ export function createGithub({ http, cache, logger, getToken = () => null }) {
     }
   }
 
-  return { repoMeta, issues, discussions, viewer, hasToken, graphql }
+  /**
+   * 作者资料（M4 新增）。
+   *
+   * 走 REST `/users/{login}`：这是**公开**信息，未登录也能读，
+   * 而且计入 core 桶（60/h）而不是 GraphQL 那个未认证为 0 的桶。
+   * 所以作者页在没登录时也能用，这和讨论列表不同 —— 这是有意选的路径。
+   *
+   * 不返回 email / location 之类的隐私字段：GitHub 公开接口会给，
+   * 但社区页没有理由把它转播出去。
+   */
+  async function userProfile(login, { force = false } = {}) {
+    const name = String(login ?? '').trim()
+    if (!/^[A-Za-z0-9-]{1,39}$/.test(name)) return { found: false, login: name }
+    const outcome = await cache.wrap(
+      `gh:user:${name.toLowerCase()}`,
+      async () => {
+        const response = await http.json(`${API}/users/${name}`, {
+          timeoutMs: 12_000,
+          resource: 'core',
+          accept: 'application/vnd.github+json',
+          label: `用户资料 ${name}`,
+        })
+        if (response.status === 404) return { found: false, login: name }
+        if (!response.ok) {
+          throw upstreamFailed(`GitHub 用户接口返回 ${response.status}`, { status: response.status })
+        }
+        const d = response.json ?? {}
+        return {
+          found: true,
+          login: String(d.login ?? name),
+          name: d.name ?? null,
+          avatarUrl: d.avatar_url ?? null,
+          htmlUrl: d.html_url ?? null,
+          type: d.type ?? 'User',
+          bio: typeof d.bio === 'string' ? d.bio : '',
+          company: d.company ?? null,
+          blog: d.blog || null,
+          repos: Number(d.public_repos) || 0,
+          followers: Number(d.followers) || 0,
+          createdAt: d.created_at ?? null,
+        }
+      },
+      { ttlMs: USER_TTL, staleTtlMs: USER_TTL * 7, force },
+    )
+    return outcome.value
+  }
+
+  /**
+   * 单条讨论的正文与评论（M4 新增）。
+   *
+   * 和 `discussions()` 一样要 token：GraphQL 未认证配额为 0。
+   * 返回值里 `available:false` + `reason` 而不是抛错，让页面能说清「为什么看不到」。
+   */
+  async function thread(repo, number, { force = false, comments = 30 } = {}) {
+    const full = parseRepo(repo)
+    const n = Number(number)
+    if (!full || !Number.isFinite(n) || n <= 0) {
+      return { available: false, reason: 'BAD_INPUT', items: [], comments: [] }
+    }
+    if (!hasToken()) {
+      return {
+        available: false,
+        reason: 'TOKEN_REQUIRED',
+        message: '讨论正文需要登录 GitHub 后才能读取（未认证时 GraphQL 配额为 0）',
+        items: [],
+        comments: [],
+      }
+    }
+    const [owner, name] = full.split('/')
+    const limit = Math.min(Math.max(Number(comments) || 30, 1), 50)
+    const outcome = await cache.wrap(
+      `gh:discussion:${full.toLowerCase()}:${n}:${limit}`,
+      async () => {
+        const data = await graphql(THREAD_QUERY, { owner, name, number: n, first: limit })
+        const d = data?.repository?.discussion
+        if (!d) return { available: false, reason: 'NOT_FOUND', items: [], comments: [] }
+        return {
+          available: true,
+          reason: null,
+          discussion: {
+            id: d.id,
+            number: d.number,
+            title: d.title,
+            url: d.url,
+            body: d.body ?? '',
+            createdAt: d.createdAt,
+            updatedAt: d.updatedAt,
+            answered: d.isAnswered === true,
+            locked: d.locked === true,
+            author: d.author?.login ?? null,
+            avatarUrl: d.author?.avatarUrl ?? null,
+            category: d.category ? { name: d.category.name, slug: d.category.slug, emoji: d.category.emoji ?? null } : null,
+            comments: d.comments?.totalCount ?? 0,
+            reactions: (d.reactionGroups ?? []).reduce((sum, g) => sum + (g.users?.totalCount ?? 0), 0),
+          },
+          comments: (d.comments?.nodes ?? []).map((c) => ({
+            id: c.id,
+            url: c.url,
+            body: c.body ?? '',
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt,
+            isAnswer: c.isAnswer === true,
+            author: c.author?.login ?? null,
+            avatarUrl: c.author?.avatarUrl ?? null,
+            reactions: (c.reactionGroups ?? []).reduce((sum, g) => sum + (g.users?.totalCount ?? 0), 0),
+            replyTo: c.replyTo?.id ?? null,
+          })),
+        }
+      },
+      { ttlMs: THREAD_TTL, staleTtlMs: 3600_000, force },
+    )
+    return outcome.value
+  }
+
+  return { repoMeta, issues, discussions, thread, userProfile, viewer, hasToken, graphql }
 }

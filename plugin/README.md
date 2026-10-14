@@ -39,9 +39,12 @@
 | 登录（GitHub Device Flow，8 位验证码） | ✅ 可用（**需要先填 `clientId`**，见下） |
 | 真正发帖 / 评论 / 表态 | ✅ 可用（`public_repo`） |
 | 侧栏入口 + 主面板社区页（`sidebar.panellist` + `main`） | ✅ 可用 |
+| **面板内发帖 / 评论 / 点赞**（不跳 GitHub 网页） | ✅ 代码就绪，**待真机登录验证** |
 | 插件详情页里嵌社区讨论（不离开当前页面） | ✅ 可用 |
-| Agent 工具（`community_search` 等 4 个） | ⏳ M4 |
-| 发布到 npm | ⏳ M4 |
+| **作者资料页** `/community/u?login=` | ✅ 可用（走 REST，**未登录也能看**） |
+| **索引质量治理**（`sort=smart`：降级框架本体与聚合清单） | ✅ 可用 |
+| Agent 工具（`community_search` 等 4 个） | ✅ 已注册 |
+| 发布到 npm | ⏳ 差一条 `npm publish`（凭据步骤归你） |
 
 **没配 `clientId` 时不会崩，也不会假装能登录**：页面会直接列出开通步骤（5 步，
 其中第 4 步「勾 Enable Device Flow」最容易漏），API 则返回 `503 NOT_CONFIGURED`。
@@ -95,11 +98,16 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 | `repo` | `dsh-plugin-community` | 社区仓库名 |
 | `allowRemote` | `false` | **默认只允许本机访问**。想让手机/局域网访问必须显式开成 `true` |
 | `cacheTtlMinutes` | `60` | 索引缓存新鲜期 |
-| `sources` | `['github-topic','awesome']` | 启用哪些索引源 |
+| `sources` | `['github-topic','awesome']` | 启用哪些索引源（可选 6 个源里有 3 个标了 `optIn`，默认不开） |
+| `frameworks` | `['deepseek-ai/deepseek-harness']` | 哪些仓库是**框架本体**而不是插件：仍然列出、仍然可筛，但在综合排序里降级 |
+| `excludeRepos` | `[]` | 要从列表里**彻底删掉**的仓库。默认空——降级而不是删除，是刻意的 |
 | `userAgent` | `dsh-plugin-community/0.1.0` | 请求 GitHub 时带的 UA |
 | `prewarm` | `true` | 启动后延迟预热体积大的源 |
 
 `owner` / `repo` **是配置项，不写死在代码里**——换仓库只改这两行。
+`frameworks` / `excludeRepos` 的存在不是为了「治理数据好看」：`topic:dsh-plugin` 是
+**自我声明**标签，任何人都能加，官方框架 `deepseek-ai/deepseek-harness` 因此常年霸榜，
+`sort=smart` 就是用来把它和「聚合清单」类仓库降下去的。做法记录在 `lib/core/rank.js` 文件头。
 
 ---
 
@@ -109,10 +117,13 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 
 | 路径 | 说明 |
 |---|---|
-| `/community` | 插件列表，支持 `?q=&category=&sort=&page=` |
+| `/community` | 插件列表，支持 `?q=&category=&kind=&sort=&page=` |
 | `/community/plugin?repo=owner/name` | 插件详情 |
-| `/community/t?id=<discussion>` | 302 跳转到 GitHub，**不二次托管讨论正文** |
-| `/community/u?login=<user>` | 按作者看帖子 |
+| `/community/t?id=<discussion>` | 302 跳转到 GitHub，**不二次托管讨论正文**（`/thread` 接口才是本地读） |
+| `/community/u?login=<user>` | 作者资料页 + 他名下的索引条目。**走 REST 的公开用户信息，未登录也能看** |
+
+`sort` 取值：`smart`（默认）/ `stars` / `downloads` / `recent` / `name`。
+`kind` 取值：空（全部）/ `plugin` / `framework` / `aggregator` / `unknown`。
 
 页面**零前端 JS**：搜索是 `<form method="get">`，翻页和筛选是 `<a>`。
 这不是洁癖，是硬要求——手机端 WebView 里客户端插件图可能加载不出来，那时页面必须还是活的。
@@ -127,8 +138,11 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 | `/api/v1/community/plugins` | GET | 列表 |
 | `/api/v1/community/plugin` | GET | 单个插件；`?repo=owner/name` 或 **`?pkg=<npm包名>`**（见下） |
 | `/api/v1/community/meta` | GET | 公开配置事实（仓库地址、前缀、是否配了 clientId）；**只给公开值** |
-| `/api/v1/community/discussions` | GET | 讨论列表 |
+| `/api/v1/community/discussions` | GET | 讨论列表（**未登录读不到**，如实返回 `available:false`） |
 | `/api/v1/community/discussion` | GET / POST | 读 / 发帖（POST 返回 **201**） |
+| `/api/v1/community/thread` | GET | 单帖正文 + 评论（`?repo=&number=`）；未登录同样如实返回 |
+| `/api/v1/community/comment` | POST | 评论 / 嵌套回复（`discussionId` + `body` + 可选 `replyToId`，201） |
+| `/api/v1/community/user` | GET | 作者资料 + 他名下的索引条目（`?login=`）；**未登录可读**，且**不回 email** |
 | `/api/v1/community/reaction` | POST | 表态（8 种之一） |
 | `/api/v1/community/issues` | GET | issue 列表 |
 | `/api/v1/community/me` | GET | 当前登录态（**永不回 token**） |
@@ -162,7 +176,7 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 | 座位 | 注册 id / key | 干什么 |
 |---|---|---|
 | `sidebar.panellist` | `community`（order 30） | 侧栏图标；**id 和主面板的 key 同名，DSH 就自动把两者连起来** |
-| `main` | key `community` | 主面板社区页（搜索 + 列表 + 跳完整页面） |
+| `main` | key `community` | 主面板社区页：**插件 / 讨论两个页签**。插件页有搜索 + 排序 + 类型筛选 + 骨架屏；讨论页未登录时给登录入口（不画发帖框），登录后有发帖表单、单帖视图、评论框、点赞按钮 |
 | `plugins.detail.badge` | `community`（order 20） | 详情页标题旁的标签；无对应插件时**渲染 null** |
 | `plugins.detail.section` | `community`（order 40） | 详情页里的社区区块：星级、issue、讨论、已知问题 |
 | `settings.section` | `community`（order 45） | 设置页：社区仓库地址 + 登录/登出 |
@@ -234,10 +248,18 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 
 ## 已知限制
 
-- **按 star 排序会把框架本体顶到最上面。** `topic:dsh-plugin` 是自我声明式的
-  （GitHub 的匹配是精确的，这点已验证），而 `deepseek-ai/deepseek-harness` 自己也打了这个标签。
-  整个生态有 19055 个仓库带这个 topic，于是「最热的插件」里混进了很多并不是插件的大仓库。
-  默认排序暂时保持 star（符合直觉），后续打算加一个混合评分或可配置的排除名单。
+- **默认是 `sort=smart`，不是按 star 排。** 原因：`topic:dsh-plugin` 是自我声明式的
+  （GitHub 的匹配是精确的，这点已验证），而 `deepseek-ai/deepseek-harness` 自己也打了这个标签，
+  于是「最热的插件」榜首常年是框架本体。整个生态有 19055 个仓库带这个 topic。
+  `smart` 把「框架本体 / 聚合清单 / 看不出是插件」三类**降级而不删除**——说
+  「它在这，但它不是插件」比假装它不存在更诚实。`?sort=stars` 仍是**纯 star 排序**，随时可切回去。
+- **`smart` 是启发式，会误伤也会漏放。** 已经知道的边界：它顶到第一的
+  `tt-a1i/archify`，描述主体其实是 Claude Code / Codex 的 agent skill，只在 topics 里挂了
+  `dsh-plugin`，外加发了一个 npm 包——也就是说「有 npm 包」这个信号可以被没有 DSH 专属功能的
+  项目满足。同类还有 `volcengine/OpenViking`、`Tencent/WeKnora`（带 topic 的通用 AI 项目）。
+  没改判据，是因为「怎么判断一个仓库真的是 DSH 插件」需要比 topic 更硬的数据源
+  （上游目录的收录、README 里的安装上下文），而那三个上游本机连不上。
+  在那之前，页面底部那句「按原样提供，未做人工审核」就是这条排序的边界。
 - **未认证配额是硬墙**：`api.github.com` 每小时 60 次、search 桶每分钟 10 次（按出口 IP 计）。
   所以列表页只吃索引源、只有详情页才补实时元数据——否则 30 条卡片就能打光一小时配额。
 - `@vscode/ripgrep-android-arm64` 这类原生包在 Android 上根本没有，所以本插件不碰原生依赖。
@@ -247,7 +269,7 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 ## 开发
 
 ```bash
-node --test "test/*.test.mjs"     # 151 个测试
+node --test "test/*.test.mjs"     # 193 个测试
 node scripts/pack-check.mjs       # 发布前自检：打包清单 + 相对 import 图 + 清单字段
 ```
 
@@ -255,16 +277,18 @@ node scripts/pack-check.mjs       # 发布前自检：打包清单 + 相对 impo
 > `Cannot find module ...\test`。用 glob 形式。
 
 测试覆盖：文本与 URL 安全、卡片归一化与合并、错误信封、缓存（含陈旧降级与并发去重）、
-索引源的解析（6 个源 + 安装命令解析）、路由（JSON/HTML/状态码/关 JS 可用）、
+索引源的解析（6 个源 + 安装命令解析）、**排序治理**（框架本体 / 聚合清单 / 未知三档的降级系数、
+置信度权重、稳定排序）、路由（JSON/HTML/状态码/关 JS 可用、单帖与评论、作者页、`kind` 筛选）、
 host 接线（路由注册与卸载、本机限制、上游全挂时仍渲染）、写路径（幂等 / 写间隔 / 绝不重试 /
 GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启动轮询拦在本地 / slow_down 加间隔）、
 **多语言**（语言解析与优先级 / 中英键集合一致 / 英文页不混汉字 / 相对时间单复数）、
 **client 半边**（bundle 形状 / 零依赖 / 七个座位 / 只 require react / 语言覆盖被记住 /
-**工具卡片的 key 与 host 工具名一一对应** + 三种 phase 的渲染 + 坏形状不抛错），
+**工具卡片的 key 与 host 工具名一一对应** + 三种 phase 的渲染 + 坏形状不抛错 +
+页签切换 / 发帖 POST / 评论 POST / 点赞失败退回 / 作者链接），
 以及 **发布边界**（包内文件都在磁盘上、`test/` 与 `node_modules/` 不进包、体积上限、
 零运行时依赖、entry point 一定在包里）。
 
-一共 **151 个测试**。
+一共 **193 个测试**。
 
 索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网。
 client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bundle 截下来跑，**也不需要浏览器**。

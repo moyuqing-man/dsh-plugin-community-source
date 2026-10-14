@@ -6,7 +6,7 @@
 
 > **仓库**：源码与这 8 份方案文档 → `moyuqing-man/dsh-plugin-community-source`（本地就是这个目录）；社区仓库（Discussions 分类 / Issue 与讨论表单 / 行为准则）→ `moyuqing-man/dsh-plugin-community`（本地是 [`m0/community-repo/`](m0/community-repo/README.md)）。两个仓库各自独立推送。
 
-> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、153 个测试全绿，但工具卡片、三个新索引源、npm 真实打包结果都还没在真实环境验证过；登录也需要自己配 Client ID。详见 [plugin/README.md](plugin/README.md) 开头的说明。
+> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、193 个测试全绿，但以下三件事**没有在真实环境验证过**：真机上的工具卡片、三个可选索引源（`dsh.so` / `dsh.works` / 岚叔目录，本机连不上）、真实 npm 打包结果；登录也需要自己配 Client ID。同样未验证的还有 client 半边新增的**面板内发帖 / 评论 / 点赞**（宿主接口已线下验证，client 侧渲染没有）。详见 [plugin/README.md](plugin/README.md) 开头的说明。
 
 ---
 
@@ -39,7 +39,7 @@
 | [08-GitHub-API-契约](docs/08-GitHub-API-契约.md) | **实测**：哪些免登录能读、哪些必须要 token、限额卡在哪、POC 怎么跑 |
 | [poc/ 验证器](poc/README.md) | **可执行**：一条命令把 08 的每条结论复现成证据（POC-0/1/2/3/4/6） |
 | [m0/ 启动包](m0/README.md) | **可交付**：M0 验证结论 + 可直接推上 GitHub 的社区仓库地基（分类 / 表单 / 首发帖） |
-| [plugin/ 插件本体](plugin/README.md) | **可运行**：M1 + M2 + M3 已跑通、M4 代码基本落盘——多源索引（6 个源，默认开 2 个）、`/community` 页面（关掉 JS 也能看）、JSON API、缓存与陈旧降级、GitHub Device Flow 登录与发帖/评论/表态、**client 半边七个座位**（侧栏入口 / 主面板 / 插件详情页区块与标签 / 设置页 / 登录浮层 / 4 个 Agent 工具的自定义卡片）、**4 个 Agent 工具**、**中英双语**（`?lang=` + 设置页可切换）；**151 个测试全绿**；英文版见 [plugin/README.en.md](plugin/README.en.md) |
+| [plugin/ 插件本体](plugin/README.md) | **可运行**：M1 + M2 + M3 + M4 已跑通——多源索引（6 个源，默认开 2 个）、**索引质量治理**（`sort=smart` 把框架本体与聚合清单降级，`?sort=stars` 仍是纯 star 排序）、`/community` 页面（关掉 JS 也能看，带类型/分类/排序 chips）、**作者资料页** `/community/u?login=`、`/api/v1/community/*` JSON API、缓存与陈旧降级、GitHub Device Flow 登录与发帖/评论/表态/单帖读取、**client 半边七个座位**（侧栏入口 / 主面板**双页签含发帖·评论·点赞** / 插件详情页区块与标签 / 设置页 / 登录浮层 / 4 个 Agent 工具的自定义卡片）、**中英双语**（`?lang=` + 设置页可切换）；**193 个测试全绿**；英文版见 [plugin/README.en.md](plugin/README.en.md) |
 
 ---
 

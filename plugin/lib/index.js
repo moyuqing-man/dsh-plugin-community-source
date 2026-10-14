@@ -39,6 +39,17 @@ export const Config = {
   sources: ['github-topic', 'awesome'],
   userAgent: 'dsh-plugin-community/0.1.0',
   prewarm: true,
+  /**
+   * 综合排序（`sort=smart`）里按「框架本体」降级的仓库。
+   *
+   * `topic:dsh-plugin` 是**自我声明**标签，框架自己也可能打上它 —— 于是
+   * `deepseek-ai/deepseek-harness`（24 万 star）会把整个索引压平。
+   * 这里列出来的仓库**不删除只降级**：仍然能搜到、仍出现在列表里，
+   * 只是不占前排，并标上「框架本体」说明为什么它排得靠后。
+   */
+  frameworks: ['deepseek-ai/deepseek-harness'],
+  /** 直接从索引里剔除的仓库（比降级更狠）。默认空 —— 删掉一个插件应该是显式决定。 */
+  excludeRepos: [],
   /** GitHub OAuth App 的 Client ID。**这是公开值，不是秘密**（Device Flow 不需要 secret）。留空则登录功能关闭。 */
   clientId: '',
   /** Device Flow 申请的 scope。公开仓库发帖用 public_repo 就够了。 */
@@ -73,6 +84,9 @@ const MAX_BODY_BYTES = 64 * 1024
 function normalizeConfig(raw = {}) {
   const config = { ...Config, ...(raw && typeof raw === 'object' ? raw : {}) }
   if (!Array.isArray(config.sources) || config.sources.length === 0) config.sources = [...Config.sources]
+  // 这两个是用户会手写的名单，写错成字符串（`frameworks: 'a/b'`）比写错成数组常见得多
+  if (!Array.isArray(config.frameworks)) config.frameworks = [...Config.frameworks]
+  if (!Array.isArray(config.excludeRepos)) config.excludeRepos = [...Config.excludeRepos]
   const ttl = Number(config.cacheTtlMinutes)
   config.cacheTtlMs = Number.isFinite(ttl) && ttl > 0 ? ttl * 60_000 : 60 * 60_000
   return config

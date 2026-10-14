@@ -151,6 +151,61 @@ window.__ModuleLoader__.load({
         langZh: '中文',
         langEn: 'English',
         langHint: z ? '默认跟随浏览器，改了会记住。' : 'Follows your browser by default; your choice is remembered.',
+
+        // 面板里的两个页签
+        tabPlugins: z ? '插件' : 'Plugins',
+        tabDiscussions: z ? '讨论' : 'Discussions',
+
+        // 排序与筛选
+        sortLabel: z ? '排序' : 'Sort',
+        sortSmart: z ? '综合' : 'Smart',
+        sortStars: z ? '星标' : 'Stars',
+        sortDownloads: z ? '下载' : 'Downloads',
+        sortRecent: z ? '最近更新' : 'Recent',
+        sortName: z ? '名称' : 'Name',
+        kindLabel: z ? '类型' : 'Type',
+        kindAll: z ? '全部' : 'All',
+        kindPlugin: z ? '插件' : 'Plugin',
+        kindFramework: z ? '框架本体' : 'Framework',
+        kindAggregator: z ? '聚合清单' : 'List',
+        kindUnknown: z ? '未分类' : 'Unclassified',
+        authorPage: z ? '作者页' : 'Author page',
+        loadingMore: z ? '加载中…' : 'Loading…',
+
+        // 讨论区
+        discussionsNeedLogin: z
+          ? '讨论列表需要登录 GitHub 才能读取（未认证时 GraphQL 配额为 0）。'
+          : 'Discussion lists need a GitHub sign-in (unauthenticated GraphQL quota is 0).',
+        discussionsEmpty: z ? '这个仓库还没有讨论。' : 'No discussions in this repository yet.',
+        discussionsUnavailable: z ? '暂时读不到讨论列表。' : 'Could not read the discussion list right now.',
+        writeNotConfigured: z
+          ? '还没配置 GitHub OAuth App 的 Client ID，登录暂时不可用。'
+          : 'No GitHub OAuth App Client ID configured yet, sign-in is unavailable.',
+        signInToPost: z ? '要发帖或回复，先用 GitHub 登录。' : 'Sign in with GitHub to post or reply.',
+        accountRepo: z ? '帖子会发到' : 'Posts go to',
+        newPost: z ? '发新帖' : 'New post',
+        postTitle: z ? '标题' : 'Title',
+        postBody: z ? '正文（支持 Markdown）' : 'Body (Markdown supported)',
+        postCategory: z ? '分类' : 'Category',
+        posting: z ? '发布中…' : 'Posting…',
+        post: z ? '发布' : 'Post',
+        cancel: z ? '取消' : 'Cancel',
+        comments: z ? '回复' : 'Replies',
+        commentPlaceholder: z ? '写一条回复…' : 'Write a reply…',
+        comment: z ? '回复' : 'Reply',
+        sending: z ? '发送中…' : 'Sending…',
+        reply: z ? '回复' : 'Reply',
+        replyTo: z ? '回复' : 'Reply to',
+        like: z ? '赞' : 'Like',
+        liked: z ? '已赞' : 'Liked',
+        back: z ? '返回列表' : 'Back to list',
+        openOnGithub: z ? '在 GitHub 打开' : 'Open on GitHub',
+        noComments: z ? '还没有人回复。' : 'No replies yet.',
+        threadUnavailable: z ? '这条帖子暂时读不到。' : 'Could not read this thread right now.',
+        postedOk: z ? '已发布。' : 'Posted.',
+        commentOk: z ? '已回复。' : 'Reply sent.',
+        skeletonHint: z ? '正在读取…' : 'Loading…',
+
         // Agent 工具卡片（第 7 个座位）
         toolUnknown: z ? '社区工具' : 'Community tool',
         toolPreparing: z ? '正在准备参数…' : 'Preparing arguments…',
@@ -271,6 +326,38 @@ window.__ModuleLoader__.load({
       '.dcom-tool-name{font-weight:600}',
       '.dcom-tool-args{color:var(--dsw-alias-label-tertiary);word-break:break-word}',
       '.dcom-tool-body{white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);max-height:220px;overflow:auto}',
+      // 页签
+      '.dcom-tabs{display:flex;gap:4px;border-bottom:1px solid var(--dsw-alias-border-l2);padding-bottom:0}',
+      '.dcom-tab{border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}',
+      '.dcom-tab.on{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}',
+      // 筛选 chips
+      '.dcom-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}',
+      '.dcom-chip{border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-tertiary);border-radius:999px;padding:1px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}',
+      '.dcom-chip.on{background:var(--dsw-alias-brand-primary);border-color:transparent;color:#fff}',
+      '.dcom-chip-label{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-right:2px}',
+      // 作者
+      '.dcom-author{color:var(--dsw-alias-label-tertiary);font-size:12px;text-decoration:none;white-space:nowrap}',
+      '.dcom-author:hover{color:var(--dsw-alias-brand-primary)}',
+      '.dcom-avatar{width:20px;height:20px;border-radius:50%;background:var(--dsw-alias-bg-layer-3);object-fit:cover}',
+      // 表单
+      '.dcom-input,.dcom-textarea{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;padding:5px 8px;border-radius:6px;box-sizing:border-box;width:100%}',
+      '.dcom-textarea{min-height:96px;resize:vertical;white-space:pre-wrap}',
+      '.dcom-select{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;padding:4px 6px;border-radius:6px}',
+      '.dcom-field{display:flex;flex-direction:column;gap:4px}',
+      '.dcom-label{color:var(--dsw-alias-label-tertiary);font-size:11px}',
+      // 正文与评论
+      '.dcom-body{white-space:pre-wrap;word-break:break-word;line-height:1.6;max-height:340px;overflow:auto}',
+      '.dcom-comment{border-top:1px solid var(--dsw-alias-border-l2);padding-top:8px;display:flex;flex-direction:column;gap:4px}',
+      '.dcom-meta{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;flex-wrap:wrap}',
+      '.dcom-err{color:var(--dsw-alias-label-error,var(--dsw-alias-brand-primary));font-size:12px}',
+      // 骨架屏：形状先摆出来，读到了再换成真内容，避免「闪一下又变高」
+      '.dcom-skel{display:flex;flex-direction:column;gap:8px}',
+      '.dcom-skel-row{height:14px;border-radius:4px;background:var(--dsw-alias-bg-layer-3);animation:dcom-pulse 1.4s ease-in-out infinite}',
+      '.dcom-skel-row.w60{width:60%}',
+      '.dcom-skel-row.w80{width:80%}',
+      '.dcom-skel-row.w40{width:40%}',
+      '@keyframes dcom-pulse{0%,100%{opacity:.45}50%{opacity:.9}}',
+      '@media (prefers-reduced-motion:reduce){.dcom-skel-row{animation:none}}',
     ].join('')
 
     function Style() {
@@ -302,29 +389,496 @@ window.__ModuleLoader__.load({
 
     /* ------------------------------ 2. 社区主面板 ----------------------------- */
 
+    // 骨架屏：先把「即将出现的形状」摆出来，读到了再换成真内容。
+    // 比一行「加载中…」好在不会让整页在数据到达时突然跳高。
+    function Skeleton(props) {
+      const widths = ['w80', 'w60', 'w80', 'w40']
+      const lines = Number(props && props.lines) || 4
+      const rows = []
+      for (let i = 0; i < lines; i += 1) {
+        rows.push(h('div', { className: 'dcom-skel-row ' + widths[i % widths.length], key: 's' + i }))
+      }
+      return h('div', { className: 'dcom-skel', 'aria-busy': 'true', 'aria-live': 'polite' }, rows)
+    }
+
+    function Chips(props) {
+      const options = props.options || []
+      return h(
+        'div',
+        { className: 'dcom-chips' },
+        props.label ? h('span', { className: 'dcom-chip-label' }, props.label) : null,
+        options.map((option) =>
+          h(
+            'button',
+            {
+              key: String(option.value),
+              type: 'button',
+              className: 'dcom-chip' + (option.value === props.value ? ' on' : ''),
+              'aria-pressed': option.value === props.value,
+              onClick: () => props.onChange(option.value),
+            },
+            option.label,
+          ),
+        ),
+      )
+    }
+
+    // 作者一律链到插件自己的作者页（`/community/u`），不是直接跳 GitHub ——
+    // 页面上还能看到他在索引里的其它插件。
+    function AuthorLink(props) {
+      const t = text(useLang())
+      const login = props.login
+      if (!login) return null
+      return h(
+        'a',
+        {
+          className: 'dcom-author',
+          href: `${PAGE_PREFIX}/u?login=${encodeURIComponent(login)}`,
+          target: '_blank',
+          rel: 'noreferrer noopener',
+          title: t.authorPage,
+        },
+        props.avatarUrl ? h('img', { className: 'dcom-avatar', src: props.avatarUrl, alt: '' }) : null,
+        '@' + login,
+      )
+    }
+
+    function kindLabel(t, kind) {
+      if (kind === 'framework') return t.kindFramework
+      if (kind === 'aggregator') return t.kindAggregator
+      if (kind === 'plugin') return t.kindPlugin
+      if (kind === 'unknown') return t.kindUnknown
+      return ''
+    }
+
     function PluginRow(props) {
       const card = props.card
       const t = text(useLang())
       const desc = card.description ? card.description[t.locale] || card.description.zh || card.description.en : ''
+      // 类型标签只在**不是普通插件**时出现：每张卡都挂一个「插件」是纯噪音，
+      // 而这个标签的用处是解释「为什么某条排得靠后」。
+      const tag = card.kind && card.kind !== 'plugin' ? kindLabel(t, card.kind) : ''
       return h(
         'div',
         { className: 'dcom-row' },
         h('a', { className: 'dcom-name', href: card.url, target: '_blank', rel: 'noreferrer noopener' }, card.name),
+        tag ? h('span', { className: 'dcom-pill' }, tag) : null,
         h('span', { className: 'dcom-desc' }, desc),
+        h(AuthorLink, { login: card.owner }),
         h('span', { className: 'dcom-star' }, card.stars ? '★ ' + fmtCount(card.stars) : ''),
+      )
+    }
+
+    function PluginBrowse() {
+      const t = text(useLang())
+      const [draft, setDraft] = React.useState('')
+      const [query, setQuery] = React.useState('')
+      const [sort, setSort] = React.useState('smart')
+      const [kind, setKind] = React.useState('')
+      const [nonce, setNonce] = React.useState(0)
+      const state = useAsync(
+        (signal) => apiGet('/plugins', { q: query, sort, kind, perPage: 30 }, signal),
+        [query, sort, kind, nonce],
+      )
+      const items = state.kind === 'ok' ? state.data.items || [] : []
+
+      return h(
+        'div',
+        { className: 'dcom' },
+        h(
+          'form',
+          {
+            className: 'dcom-actions',
+            onSubmit: (event) => {
+              event.preventDefault()
+              setQuery(draft.trim())
+            },
+          },
+          h('input', {
+            className: 'dcom-input',
+            style: { flex: '1 1 180px', width: 'auto' },
+            value: draft,
+            placeholder: t.search,
+            onChange: (event) => setDraft(event.target.value),
+            'aria-label': t.search,
+          }),
+          h('button', { className: 'dcom-btn', type: 'submit' }, t.search),
+        ),
+        h(Chips, {
+          label: t.sortLabel,
+          value: sort,
+          onChange: setSort,
+          options: [
+            { value: 'smart', label: t.sortSmart },
+            { value: 'stars', label: t.sortStars },
+            { value: 'downloads', label: t.sortDownloads },
+            { value: 'recent', label: t.sortRecent },
+            { value: 'name', label: t.sortName },
+          ],
+        }),
+        h(Chips, {
+          label: t.kindLabel,
+          value: kind,
+          onChange: setKind,
+          options: [
+            { value: '', label: t.kindAll },
+            { value: 'plugin', label: t.kindPlugin },
+            { value: 'framework', label: t.kindFramework },
+            { value: 'aggregator', label: t.kindAggregator },
+          ],
+        }),
+        state.kind === 'loading' ? h('div', { className: 'dcom-card' }, h(Skeleton, { lines: 5 })) : null,
+        state.kind === 'error'
+          ? h(
+              'div',
+              { className: 'dcom-card' },
+              h('span', { className: 'dcom-muted' }, t.failed + ' ' + (state.error && state.error.message ? state.error.message : '')),
+              h(
+                'div',
+                { className: 'dcom-actions' },
+                h('button', { className: 'dcom-btn', type: 'button', onClick: () => setNonce((n) => n + 1) }, t.retry),
+              ),
+            )
+          : null,
+        state.kind === 'ok' && items.length === 0 ? h('div', { className: 'dcom-muted' }, t.empty) : null,
+        items.length
+          ? h(
+              'div',
+              { className: 'dcom-card' },
+              h('div', { className: 'dcom-list' }, items.map((card) => h(PluginRow, { key: card.slug || card.repo, card }))),
+            )
+          : null,
+      )
+    }
+
+    /* --------------------------- 讨论：列表 / 单帖 / 发帖 --------------------------- */
+
+    // 发新帖。写操作一律要求登录 —— 未登录时这里根本不该出现（上层已经拦掉）。
+    function Composer(props) {
+      const t = text(useLang())
+      const categories = props.categories || []
+      const [title, setTitle] = React.useState('')
+      const [body, setBody] = React.useState('')
+      const [category, setCategory] = React.useState('')
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+
+      /*
+       * 分类是异步来的：用户完全可能在讨论列表还没回来时就点了「发新帖」。
+       * 这时 `categories` 还是空的，如果用 useState 的初值去冻结默认分类，
+       * 分类就要么是空串、要么下拉框干脆不画 —— 两种都很难看。
+       * 所以**不冻结**：提交时再算，填过就用填的，没填就用第一个分类。
+       */
+      const chosen = category || (categories[0] ? categories[0].slug : '')
+
+      async function submit(event) {
+        event.preventDefault()
+        if (busy) return
+        setBusy(true)
+        setError('')
+        try {
+          await apiPost('/discussion', { title, body, category: chosen })
+          setTitle('')
+          setBody('')
+          props.onPosted(t.postedOk)
+        } catch (err) {
+          setError(err && err.message ? err.message : String(err))
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      return h(
+        'form',
+        { className: 'dcom-card', onSubmit: submit },
+        h('div', { className: 'dcom-sub' }, t.newPost),
+        h(
+          'div',
+          { className: 'dcom-field' },
+          h('label', { className: 'dcom-label' }, t.postTitle),
+          h('input', {
+            className: 'dcom-input',
+            value: title,
+            required: true,
+            onChange: (event) => setTitle(event.target.value),
+            'aria-label': t.postTitle,
+          }),
+        ),
+        h(
+          'div',
+          { className: 'dcom-field' },
+          h('label', { className: 'dcom-label' }, t.postBody),
+          h('textarea', {
+            className: 'dcom-textarea',
+            value: body,
+            onChange: (event) => setBody(event.target.value),
+            'aria-label': t.postBody,
+          }),
+        ),
+        categories.length
+          ? h(
+              'div',
+              { className: 'dcom-field' },
+              h('label', { className: 'dcom-label' }, t.postCategory),
+              h(
+                'select',
+                { className: 'dcom-select', value: chosen, onChange: (event) => setCategory(event.target.value) },
+                categories.map((c) =>
+                  h('option', { key: c.slug, value: c.slug }, (c.emoji ? c.emoji + ' ' : '') + c.name),
+                ),
+              ),
+            )
+          : null,
+        error ? h('div', { className: 'dcom-err' }, error) : null,
+        h(
+          'div',
+          { className: 'dcom-actions' },
+          h('button', { className: 'dcom-btn primary', type: 'submit', disabled: busy }, busy ? t.posting : t.post),
+          h('button', { className: 'dcom-btn', type: 'button', onClick: props.onCancel }, t.cancel),
+          h('span', { className: 'dcom-muted' }, t.accountRepo + ' ' + String(props.repo || '')),
+        ),
+      )
+    }
+
+    function ThreadView(props) {
+      const t = text(useLang())
+      const [nonce, setNonce] = React.useState(0)
+      const state = useAsync(
+        (signal) => apiGet('/thread', { repo: props.repo, number: props.number }, signal),
+        [props.repo, props.number, nonce],
+      )
+      const [reply, setReply] = React.useState('')
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [note, setNote] = React.useState('')
+      const [liked, setLiked] = React.useState({})
+
+      async function like(subjectId) {
+        if (!subjectId || liked[subjectId]) return
+        setLiked((prev) => Object.assign({}, prev, { [subjectId]: true }))
+        try {
+          await apiPost('/reaction', { subjectId, content: 'THUMBS_UP' })
+        } catch {
+          // 点赞失败就把按钮恢复成未点状态，别让界面说谎
+          setLiked((prev) => {
+            const next = Object.assign({}, prev)
+            delete next[subjectId]
+            return next
+          })
+        }
+      }
+
+      async function send(event) {
+        event.preventDefault()
+        const discussion = state.kind === 'ok' && state.data ? state.data.discussion : null
+        if (!discussion || busy || !reply.trim()) return
+        setBusy(true)
+        setError('')
+        try {
+          await apiPost('/comment', { discussionId: discussion.id, body: reply })
+          setReply('')
+          setNote(t.commentOk)
+          setNonce((n) => n + 1)
+        } catch (err) {
+          setError(err && err.message ? err.message : String(err))
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const data = state.kind === 'ok' ? state.data : null
+      const discussion = data && data.discussion ? data.discussion : null
+      const comments = (data && data.comments) || []
+
+      return h(
+        'div',
+        { className: 'dcom' },
+        h(
+          'div',
+          { className: 'dcom-actions' },
+          h('button', { className: 'dcom-btn', type: 'button', onClick: props.onBack }, t.back),
+          discussion
+            ? h('a', { className: 'dcom-btn', href: discussion.url, target: '_blank', rel: 'noreferrer noopener' }, t.openOnGithub)
+            : null,
+        ),
+        state.kind === 'loading' ? h('div', { className: 'dcom-card' }, h(Skeleton, { lines: 4 })) : null,
+        state.kind === 'error' ? h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-muted' }, t.threadUnavailable)) : null,
+        // 读不到就说读不到，不给一个空壳 —— 空正文会被误读成「这条帖子没有内容」。
+        data && data.available === false
+          ? h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-muted' }, t.threadUnavailable))
+          : null,
+        discussion
+          ? h(
+              'div',
+              { className: 'dcom-card' },
+              h('div', { className: 'dcom-head' }, h('span', { className: 'dcom-title' }, discussion.title)),
+              h(
+                'div',
+                { className: 'dcom-meta' },
+                h(AuthorLink, { login: discussion.author, avatarUrl: discussion.avatarUrl }),
+                discussion.category ? h('span', { className: 'dcom-pill' }, discussion.category.name) : null,
+                h('span', null, t.comments + ' ' + String(discussion.comments || 0)),
+                h(
+                  'button',
+                  {
+                    className: 'dcom-chip' + (liked[discussion.id] ? ' on' : ''),
+                    type: 'button',
+                    'aria-pressed': Boolean(liked[discussion.id]),
+                    onClick: () => like(discussion.id),
+                  },
+                  (liked[discussion.id] ? '♥ ' + t.liked : '♡ ' + t.like) + (discussion.reactions ? ' ' + discussion.reactions : ''),
+                ),
+              ),
+              discussion.body ? h('div', { className: 'dcom-body' }, discussion.body) : null,
+            )
+          : null,
+        discussion
+          ? h(
+              'div',
+              { className: 'dcom-card' },
+              h('div', { className: 'dcom-sub' }, t.comments + ' (' + String(comments.length) + ')'),
+              comments.length === 0 ? h('div', { className: 'dcom-muted' }, t.noComments) : null,
+              comments.map((c) =>
+                h(
+                  'div',
+                  { className: 'dcom-comment', key: c.id },
+                  h(
+                    'div',
+                    { className: 'dcom-meta' },
+                    h(AuthorLink, { login: c.author, avatarUrl: c.avatarUrl }),
+                    c.isAnswer ? h('span', { className: 'dcom-pill' }, '✓') : null,
+                    h(
+                      'button',
+                      {
+                        className: 'dcom-chip' + (liked[c.id] ? ' on' : ''),
+                        type: 'button',
+                        'aria-pressed': Boolean(liked[c.id]),
+                        onClick: () => like(c.id),
+                      },
+                      (liked[c.id] ? '♥ ' + t.liked : '♡ ' + t.like) + (c.reactions ? ' ' + c.reactions : ''),
+                    ),
+                  ),
+                  h('div', { className: 'dcom-body' }, c.body),
+                ),
+              ),
+              h(
+                'form',
+                { className: 'dcom-field', onSubmit: send },
+                h('label', { className: 'dcom-label' }, t.reply),
+                h('textarea', {
+                  className: 'dcom-textarea',
+                  style: { minHeight: '72px' },
+                  value: reply,
+                  placeholder: t.commentPlaceholder,
+                  onChange: (event) => setReply(event.target.value),
+                  'aria-label': t.commentPlaceholder,
+                }),
+                error ? h('div', { className: 'dcom-err' }, error) : null,
+                note ? h('div', { className: 'dcom-muted' }, note) : null,
+                h(
+                  'div',
+                  { className: 'dcom-actions' },
+                  h('button', { className: 'dcom-btn primary', type: 'submit', disabled: busy || !reply.trim() }, busy ? t.sending : t.comment),
+                ),
+              ),
+            )
+          : null,
+      )
+    }
+
+    function DiscussionsTab(props) {
+      const t = text(useLang())
+      const repo = props.repo
+      const me = props.me
+      const authed = Boolean(me && me.authenticated)
+      const [open, setOpen] = React.useState(null)
+      const [composing, setComposing] = React.useState(false)
+      const [nonce, setNonce] = React.useState(0)
+      const [note, setNote] = React.useState('')
+      const state = useAsync(
+        (signal) => (authed && repo ? apiGet('/discussions', { repo, first: 30 }, signal) : Promise.resolve(null)),
+        [authed, repo, nonce],
+      )
+      const data = state.kind === 'ok' ? state.data : null
+
+      if (!authed) {
+        return h(
+          'div',
+          { className: 'dcom' },
+          h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-muted' }, t.discussionsNeedLogin)),
+          h(
+            'div',
+            { className: 'dcom-actions' },
+            h('a', { className: 'dcom-btn primary', href: `${PAGE_PREFIX}/login`, target: '_blank', rel: 'noreferrer noopener' }, t.login),
+          ),
+        )
+      }
+
+      if (open) {
+        return h(ThreadView, { repo, number: open, onBack: () => setOpen(null) })
+      }
+
+      const items = (data && data.items) || []
+      const categories = (data && data.categories) || []
+
+      return h(
+        'div',
+        { className: 'dcom' },
+        h(
+          'div',
+          { className: 'dcom-actions' },
+          h('button', { className: 'dcom-btn primary', type: 'button', onClick: () => setComposing((v) => !v) }, t.newPost),
+          h('button', { className: 'dcom-btn', type: 'button', onClick: () => setNonce((n) => n + 1) }, t.retry),
+        ),
+        note ? h('div', { className: 'dcom-muted' }, note) : null,
+        composing
+          ? h(Composer, {
+              repo,
+              categories,
+              onCancel: () => setComposing(false),
+              onPosted: (message) => {
+                setComposing(false)
+                setNote(message)
+                setNonce((n) => n + 1)
+              },
+            })
+          : null,
+        state.kind === 'loading' ? h('div', { className: 'dcom-card' }, h(Skeleton, { lines: 4 })) : null,
+        state.kind === 'error' ? h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-muted' }, t.discussionsUnavailable)) : null,
+        data && data.available === false
+          ? h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-muted' }, t.discussionsUnavailable))
+          : null,
+        data && data.available && items.length === 0 ? h('div', { className: 'dcom-muted' }, t.discussionsEmpty) : null,
+        items.length
+          ? h(
+              'div',
+              { className: 'dcom-card' },
+              h('div', { className: 'dcom-list' }, items.map((item) =>
+                h(
+                  'div',
+                  { className: 'dcom-row', key: String(item.number) },
+                  h(
+                    'button',
+                    { className: 'dcom-name dcom-tab', style: { borderBottom: 0, padding: 0 }, type: 'button', onClick: () => setOpen(item.number) },
+                    item.title,
+                  ),
+                  item.answered ? h('span', { className: 'dcom-pill' }, '✓') : null,
+                  h(AuthorLink, { login: item.author, avatarUrl: item.avatarUrl }),
+                  h('span', { className: 'dcom-star' }, t.comments + ' ' + String(item.comments || 0)),
+                ),
+              )),
+            )
+          : null,
       )
     }
 
     function CommunityPanel() {
       const t = text(useLang())
-      const [query, setQuery] = React.useState('')
-      const [term, setTerm] = React.useState('')
-      const state = useAsync(
-        (signal) => apiGet('/plugins', { q: term, sort: 'stars', perPage: 30 }, signal),
-        [term],
-      )
-
-      const items = state.kind === 'ok' ? state.data.items || [] : []
+      const [tab, setTab] = React.useState('plugins')
+      const meta = useAsync((signal) => apiGet('/meta', null, signal), [])
+      const me = useAsync((signal) => apiGet('/me', null, signal), [])
+      const metaData = meta.kind === 'ok' ? meta.data : null
+      const meData = me.kind === 'ok' ? me.data : null
 
       return h(
         'div',
@@ -337,39 +891,27 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dcom-sub' }, t.subtitle),
         ),
         h(
-          'form',
-          {
-            className: 'dcom-actions',
-            onSubmit: (event) => {
-              event.preventDefault()
-              setTerm(query.trim())
-            },
-          },
-          h('input', {
-            className: 'dcom-row',
-            style: { flex: '1 1 200px', border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-2)', color: 'inherit', font: 'inherit', padding: '5px 8px' },
-            value: query,
-            placeholder: t.search,
-            onChange: (event) => setQuery(event.target.value),
-            'aria-label': t.search,
-          }),
-          h('button', { className: 'dcom-btn', type: 'submit' }, t.search),
+          'div',
+          { className: 'dcom-tabs', role: 'tablist' },
+          h(
+            'button',
+            { className: 'dcom-tab' + (tab === 'plugins' ? ' on' : ''), type: 'button', role: 'tab', 'aria-selected': tab === 'plugins', onClick: () => setTab('plugins') },
+            t.tabPlugins,
+          ),
+          h(
+            'button',
+            { className: 'dcom-tab' + (tab === 'discussions' ? ' on' : ''), type: 'button', role: 'tab', 'aria-selected': tab === 'discussions', onClick: () => setTab('discussions') },
+            t.tabDiscussions,
+          ),
+          h('span', { style: { marginLeft: 'auto' } }, null),
           h('a', { className: 'dcom-btn', href: `${PAGE_PREFIX}/`, target: '_blank', rel: 'noreferrer noopener' }, t.open),
         ),
-        state.kind === 'loading' ? h('div', { className: 'dcom-muted' }, t.loading) : null,
-        state.kind === 'error'
-          ? h(
-              'div',
-              { className: 'dcom-card' },
-              h('span', { className: 'dcom-muted' }, t.failed + ' ' + (state.error && state.error.message ? state.error.message : '')),
-              h('div', { className: 'dcom-actions' },
-                h('button', { className: 'dcom-btn', type: 'button', onClick: () => setTerm(term + ' ') }, t.retry)),
-            )
-          : null,
-        state.kind === 'ok' && items.length === 0 ? h('div', { className: 'dcom-muted' }, t.empty) : null,
-        items.length
-          ? h('div', { className: 'dcom-card' }, h('div', { className: 'dcom-list' }, items.map((card) => h(PluginRow, { key: card.slug || card.repo, card }))))
-          : null,
+        tab === 'plugins'
+          ? h(PluginBrowse)
+          : h(DiscussionsTab, {
+              repo: metaData ? metaData.fullName : '',
+              me: meData,
+            }),
       )
     }
 

@@ -54,12 +54,39 @@ const MESSAGES = {
     'index.empty': '没有匹配的结果。换个关键词，或者清清筛选。',
     'index.pagerPrev': '← 上一页',
     'index.pagerNext': '下一页 →',
+    'index.byKind': '按类型',
+    'index.kindTip':
+      '**「综合排序」在压住两类噪声**：`topic:dsh-plugin` 是自我声明的标签，谁都能打，所以官方框架本体和「清单仓库」都会混进来。这里把它们降级而不是删掉——说清「它在这，但它不是插件」，比假装不存在更诚实。',
+    'index.kindAll': '全部类型',
+    'kind.framework': '框架本体',
+    'kind.aggregator': '聚合清单',
+    'kind.plugin': '插件',
+    'kind.unknown': '未归类',
+    'card.kindTag': '类型：{label}',
+    'card.authorLink': '作者主页',
 
     // ---------------------------------- 排序 ----------------------------------
+    'sort.smart': '综合排序',
     'sort.stars': '按 star',
     'sort.downloads': '按下载量',
     'sort.recent': '按收录时间',
     'sort.name': '按名称',
+
+    // ---------------------------------- 作者页 ----------------------------------
+    'user.title': '{login} 的插件 · DSH 插件社区',
+    'user.description': '{login} 在 DSH 插件索引里的条目。',
+    'user.heading': '作者',
+    'user.plugins': '收录的插件',
+    'user.none': '索引里还没有这个作者的插件。',
+    'user.notFound': 'GitHub 上没有叫 {login} 的用户。下面是索引里同名作者的条目。',
+    'user.unavailable': '暂时读不到 GitHub 资料（{reason}）。下面只显示索引里的条目。',
+    'user.repos': '公开仓库',
+    'user.followers': '关注者',
+    'user.joined': '注册于',
+    'user.profile': 'GitHub 主页',
+    'user.count': '索引里有 {count} 个条目',
+    'user.backToUser': '← 回到 {login} 的主页',
+    'user.ownerBadge': '作者主页',
 
     // ---------------------------------- 卡片 ----------------------------------
     'card.noDescription': '（这个条目没有写说明）',
@@ -172,12 +199,39 @@ const MESSAGES = {
     'index.empty': 'No matches. Try another keyword, or clear the filters.',
     'index.pagerPrev': '← Previous',
     'index.pagerNext': 'Next →',
+    'index.byKind': 'By type',
+    'index.kindTip':
+      '**“Smart” order suppresses two kinds of noise**: `topic:dsh-plugin` is a self-declared label anyone can add, so the framework itself and “list” repositories get swept in. They are ranked down rather than removed — saying “it is here, but it is not a plugin” beats pretending it does not exist.',
+    'index.kindAll': 'All types',
+    'kind.framework': 'Framework',
+    'kind.aggregator': 'List',
+    'kind.plugin': 'Plugin',
+    'kind.unknown': 'Unclassified',
+    'card.kindTag': 'Type: {label}',
+    'card.authorLink': 'Author page',
 
     // ---------------------------------- Sort ----------------------------------
+    'sort.smart': 'Smart order',
     'sort.stars': 'By stars',
     'sort.downloads': 'By downloads',
     'sort.recent': 'By date added',
     'sort.name': 'By name',
+
+    // ---------------------------------- Author page ----------------------------------
+    'user.title': 'Plugins by {login} · DSH Plugin Community',
+    'user.description': 'Entries by {login} in the DSH plugin index.',
+    'user.heading': 'Author',
+    'user.plugins': 'Indexed plugins',
+    'user.none': 'No plugins by this author in the index yet.',
+    'user.notFound': 'No GitHub user named {login}. Below are index entries from an author with the same name.',
+    'user.unavailable': 'Could not read the GitHub profile right now ({reason}). Showing only index entries below.',
+    'user.repos': 'Public repos',
+    'user.followers': 'Followers',
+    'user.joined': 'Joined',
+    'user.profile': 'GitHub profile',
+    'user.count': '{count} entries in the index',
+    'user.backToUser': '← Back to {login}',
+    'user.ownerBadge': 'Author page',
 
     // ---------------------------------- Card ----------------------------------
     'card.noDescription': '(this entry has no description)',

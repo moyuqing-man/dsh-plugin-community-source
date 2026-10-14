@@ -22,6 +22,17 @@
         sources:
           - 'github-topic'
           - 'awesome'
+        # 综合排序（默认排序）里按「框架本体」降级的仓库。
+        #
+        # topic:dsh-plugin 是**自我声明**标签，框架自己也打了它，于是
+        # deepseek-ai/deepseek-harness 用 24 万 star 把所有插件压到看不见。
+        # 这里列出的仓库**不删除、只降级**：仍然能搜到、仍在列表里，
+        # 只是不占前排，并带上「框架本体」标签解释它为什么靠后。
+        frameworks:
+          - 'deepseek-ai/deepseek-harness'
+        # 直接从索引剔除的仓库（比降级更狠）。默认空——
+        # 让一个插件从索引里消失应该是显式决定，不是排序的副作用。
+        excludeRepos: []
         # GitHub OAuth App 的 Client ID（公开值，不是密钥）。
         # 留空 = 登录功能关闭，页面只读；填上才能登录、发帖、评论。
         #

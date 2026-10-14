@@ -13,7 +13,7 @@ import {
   methodNotAllowed,
   notFound,
 } from './errors.js'
-import { renderDetail, renderError, renderIndex, renderLogin } from './render.js'
+import { renderDetail, renderError, renderIndex, renderLogin, renderUser } from './render.js'
 import { resolveLocale, translator } from './i18n.js'
 import { parseRepo } from './text.js'
 
@@ -27,8 +27,11 @@ const API_ROUTES = [
   { path: 'plugin', methods: ['GET'] },
   { path: 'discussions', methods: ['GET'] },
   { path: 'discussion', methods: ['GET', 'POST'] },
+  { path: 'thread', methods: ['GET'] },
+  { path: 'comment', methods: ['POST'] },
   { path: 'reaction', methods: ['POST'] },
   { path: 'issues', methods: ['GET'] },
+  { path: 'user', methods: ['GET'] },
   { path: 'meta', methods: ['GET'] },
   { path: 'me', methods: ['GET'] },
   { path: 'auth/start', methods: ['POST'] },
@@ -136,7 +139,8 @@ export function createCommunityRouter({
         const list = await indexService.list({
           q: String(query.q ?? '').trim(),
           category: String(query.category ?? '').trim(),
-          sort: String(query.sort ?? 'stars').trim(),
+          kind: String(query.kind ?? '').trim(),
+          sort: String(query.sort ?? indexService.smart ?? 'smart').trim(),
           page: intOf(query.page, 1),
           perPage: intOf(query.perPage, 30),
           force: query.force === '1' || query.force === 'true',
@@ -150,6 +154,8 @@ export function createCommunityRouter({
             pages: list.pages,
             perPage: list.perPage,
             sort: list.sort,
+            sorts: indexService.sorts ?? null,
+            kind: list.kind ?? '',
             facets: list.facets,
             knownTotal: list.knownTotal,
           },
@@ -220,6 +226,40 @@ export function createCommunityRouter({
         return json(200, { ok: true, data: result, meta: { requestId } })
       }
 
+      /**
+       * 单条讨论的正文与评论（M4 新增）。
+       *
+       * 单独一条路由而不是塞进 `plugin`：`plugin` 是「按仓库看整体」，
+       * 这里是「按编号看一条」，两者的缓存键、失败原因和配额代价都不一样。
+       */
+      case 'thread': {
+        const repo = parseRepo(String(query.repo ?? ''))
+        const number = intOf(query.number ?? query.id, NaN)
+        if (!repo) throw badRequest('缺少或不合法的 repo 参数', ['repo'])
+        if (!Number.isFinite(number) || number <= 0) throw badRequest('缺少或不合法的 number 参数', ['number'])
+        const thread = await github.thread(repo, number, {
+          force: query.force === '1',
+          comments: intOf(query.comments, 30),
+        })
+        return json(200, { ok: true, data: thread, meta: { requestId } })
+      }
+
+      /**
+       * 发评论（M4 新增）。
+       *
+       * 之前只有 `/community` 页面的「去 GitHub 回复」链接，所以「在 DSH 里
+       * 参与讨论」这件事实际没做到 —— 这条路由把它补上，仍然是登录才能用。
+       */
+      case 'comment': {
+        const payload = await readJson(ctx.readBody)
+        const created = await writer.addComment({
+          discussionId: payload.discussionId ?? payload.id,
+          body: payload.body,
+          replyToId: payload.replyToId,
+        })
+        return json(201, { ok: true, data: created, meta: { requestId } })
+      }
+
       case 'meta': {
         // client 半边只拿得到「我是谁、社区在哪个仓库、登录配好没有」这类公开事实。
         // 这里**不放** client secret、token 或任何私密值 —— docs/04 §7 的硬要求。
@@ -246,6 +286,25 @@ export function createCommunityRouter({
       case 'me': {
         const me = await auth.status()
         return json(200, { ok: true, data: me, meta: { requestId } })
+      }
+
+      /**
+       * 作者资料（M4 新增）。公开信息，未登录也能读（走 REST，不计 GraphQL 配额）。
+       * 顺带把「他有哪些插件在索引里」一并返回，否则前端要为每个作者再查一轮。
+       */
+      case 'user': {
+        const login = String(query.login ?? '').trim()
+        if (!login) throw badRequest('缺少 login 参数', ['login'])
+        const profile = await github.userProfile(login, { force: query.force === '1' })
+        const owned = await indexService.list({ q: login, perPage: 100 })
+        const plugins = (owned?.items ?? []).filter(
+          (card) => String(card.owner ?? '').toLowerCase() === login.toLowerCase(),
+        )
+        return json(200, {
+          ok: true,
+          data: { profile, plugins, count: plugins.length },
+          meta: { requestId },
+        })
       }
 
       case 'auth/start': {
@@ -294,7 +353,8 @@ export function createCommunityRouter({
       const list = await indexService.list({
         q: String(query.q ?? '').trim(),
         category: String(query.category ?? '').trim(),
-        sort: String(query.sort ?? 'stars').trim(),
+        kind: String(query.kind ?? '').trim(),
+        sort: String(query.sort ?? indexService.smart ?? 'smart').trim(),
         page: intOf(query.page, 1),
         perPage: intOf(query.perPage, 30),
       })
@@ -374,17 +434,19 @@ export function createCommunityRouter({
     if (clean === 'u') {
       const login = String(query.login ?? '').trim()
       if (!login) throw badRequest('缺少 login 参数', ['login'])
-      const list = await indexService.list({ q: login, sort: 'stars', perPage: 100 })
-      const owned = list.items.filter((card) => card.owner.toLowerCase() === login.toLowerCase())
+      // 两件事互不依赖：GitHub 资料失败**不该**让「他有哪些插件」也一起消失。
+      let profile = { found: false, login }
+      let reason = ''
+      try {
+        profile = await github.userProfile(login, { force: query.force === '1' })
+      } catch (error) {
+        reason = String(error?.message ?? error)
+      }
+      const list = await indexService.list({ q: login, perPage: 100 })
+      const owned = list.items.filter((card) => String(card.owner ?? '').toLowerCase() === login.toLowerCase())
       return html(
         200,
-        renderIndex({
-          list: { ...list, items: owned, total: owned.length, query: '', facets: { categories: [], archived: 0, withNpm: 0 } },
-          config,
-          origin,
-          status,
-          locale,
-        }),
+        renderUser({ profile, plugins: owned, login, origin, status, locale, reason }),
       )
     }
 

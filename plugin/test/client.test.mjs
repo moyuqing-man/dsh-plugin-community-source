@@ -95,10 +95,10 @@ function makeHarness() {
   }
 }
 
-async function boot() {
+async function boot(react) {
   const spec = await loadBundle()
   const moduleExports = spec.factory((name) => {
-    if (name === 'react') return makeReact()
+    if (name === 'react') return react || makeReact()
     throw new Error(`client 半边不应该 require ${name}`)
   })
   return { spec, moduleExports }
@@ -441,5 +441,463 @@ test('工具卡片遇到不认识的形状也不抛错 —— 视图层不能把
   // 非文本内容块要被忽略而不是渲染成 [object Object]
   const weird = textsOf(view.Component({ phase: 'result', block: { content: [{ type: 'image', source: {} }, 42, null] } }))
   assert.doesNotMatch(weird.join(' '), /object Object/)
+})
+
+/* ------------------------- 交互界面：发帖 / 评论 / 点赞 ------------------------- */
+
+/*
+ * 上面那套 makeReact 只够验「注册了哪些座位」——它的 createElement 不调用子组件，
+ * useState 是空壳。发帖、评论、点赞这些**要真的点一下才知道对不对**，
+ * 所以这里再搭一个够用的迷你 React：真的存 state、真的跑 effect、
+ * 真的把子组件渲染下去。
+ *
+ * 不引真 React 是有意的：本机 npm registry 不可达，而且 client 半边的红线就是
+ * 「宿主给什么就用什么」——测试同样只依赖那个最小接口。
+ */
+function createUI() {
+  const store = new Map()
+  let current = null
+  let counters = new Map()
+
+  function slot() {
+    if (!store.has(current.key)) store.set(current.key, [])
+    return store.get(current.key)
+  }
+
+  const React = {
+    createElement: (type, props, ...children) => ({ type, props, children }),
+    useState(initial) {
+      const slots = slot()
+      const index = current.index++
+      if (!(index in slots)) slots[index] = { value: typeof initial === 'function' ? initial() : initial }
+      const cell = slots[index]
+      return [
+        cell.value,
+        (next) => {
+          cell.value = typeof next === 'function' ? next(cell.value) : next
+        },
+      ]
+    },
+    useEffect(effect, deps) {
+      const slots = slot()
+      const index = current.index++
+      const prev = slots[index]
+      const changed =
+        !prev ||
+        !deps ||
+        !prev.deps ||
+        deps.length !== prev.deps.length ||
+        deps.some((item, i) => item !== prev.deps[i])
+      if (!prev) slots[index] = { deps, cleanup: null }
+      else prev.deps = deps
+      if (!changed) return
+      if (prev && typeof prev.cleanup === 'function') prev.cleanup()
+      const cleanup = effect()
+      slots[index] = { deps, cleanup: typeof cleanup === 'function' ? cleanup : null }
+    },
+  }
+
+  function renderNode(node) {
+    if (node === null || node === undefined || node === false || node === true) return null
+    if (typeof node === 'string' || typeof node === 'number') return String(node)
+    if (Array.isArray(node)) return node.map(renderNode).filter((child) => child !== null)
+    if (typeof node.type === 'function') {
+      const name = node.type.name || 'anon'
+      const seen = counters.get(name) || 0
+      counters.set(name, seen + 1)
+      const previous = current
+      current = { key: `${name}#${seen}`, index: 0 }
+      let out
+      try {
+        out = node.type(node.props || {})
+      } finally {
+        current = previous
+      }
+      return renderNode(out)
+    }
+    return {
+      type: node.type,
+      props: node.props || {},
+      children: (node.children || []).map(renderNode).filter((child) => child !== null),
+    }
+  }
+
+  return {
+    React,
+    render(Component, props) {
+      counters = new Map()
+      return renderNode(React.createElement(Component, props || {}))
+    },
+  }
+}
+
+function findAll(node, predicate, out = []) {
+  if (node === null || node === undefined || typeof node === 'string') return out
+  if (Array.isArray(node)) {
+    for (const item of node) findAll(item, predicate, out)
+    return out
+  }
+  if (typeof node !== 'object') return out
+  if (predicate(node)) out.push(node)
+  for (const child of node.children || []) findAll(child, predicate, out)
+  return out
+}
+
+function allText(node, out = []) {
+  if (node === null || node === undefined) return out
+  if (typeof node === 'string') {
+    out.push(node)
+    return out
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) allText(item, out)
+    return out
+  }
+  if (typeof node !== 'object') return out
+  for (const child of node.children || []) allText(child, out)
+  return out
+}
+
+const buttonByText = (tree, text) =>
+  findAll(tree, (node) => node.type === 'button' && allText(node).join('').includes(text))[0]
+
+/** 让 `useAsync` 的 promise 链跑完。 */
+const settle = async () => {
+  for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setImmediate(resolve))
+}
+
+/**
+ * 假的 fetch：按「方法 + 去掉前缀的路径」查表，并记录每一次调用。
+ * 表里给函数就是动态响应；给 `{__status}` 对象就是造一个失败响应。
+ */
+function mockFetch(routes) {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const path = String(url).replace('/api/v1/community', '').split('?')[0]
+    const method = options.method || 'GET'
+    calls.push({ method, path, body: options.body ? JSON.parse(String(options.body)) : null })
+    const handler = routes[`${method} ${path}`]
+    if (!handler) throw new Error(`测试没准备这条路：${method} ${path}`)
+    const value = typeof handler === 'function' ? handler(calls.length) : handler
+    if (value && value.__status) {
+      return {
+        ok: false,
+        status: value.__status,
+        json: async () => ({ ok: false, reason: value.reason, message: value.message || '失败了' }),
+      }
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true, data: value }) }
+  }
+  return calls
+}
+
+async function withWindow(lang, fn) {
+  const previousFetch = globalThis.fetch
+  globalThis.window = {
+    localStorage: { getItem: () => lang, setItem() {} },
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return true
+    },
+    location: { reload() {} },
+  }
+  try {
+    return await fn()
+  } finally {
+    delete globalThis.window
+    if (previousFetch === undefined) delete globalThis.fetch
+    else globalThis.fetch = previousFetch
+  }
+}
+
+/**
+ * 起一个真的会响应点击的主面板。
+ *
+ * 关键点：`boot` 必须用**上面那个迷你 React**（`ui.React`）来造模块 ——
+ * 用文件开头那个空壳 `makeReact()` 的话，`useState` 是死的、`useEffect` 不跑，
+ * 点按钮什么都不会发生，测出来的「通过」是假的。
+ */
+async function panelWith(routes) {
+  const ui = createUI()
+  const { moduleExports } = await boot(ui.React)
+  const harness = makeHarness()
+  moduleExports.apply(harness.ctx)
+  const Panel = harness.registered.find((entry) => entry.spec.name === 'main').Component
+  const calls = mockFetch(routes)
+  ui.render(Panel, {})
+  await settle()
+  const draw = () => ui.render(Panel, {})
+  /*
+   * 一次「渲染 → 等异步 → 再渲染」。
+   *
+   * 必须按这个顺序：请求是在**渲染时**的 effect 里发出去的，
+   * 所以光 await 不会让新页签的数据出现 —— 得先画一次让它去请求，
+   * 等回来再画一次才看得到内容。少了中间这一步，拿到的是加载中的空壳。
+   */
+  const refresh = async () => {
+    draw()
+    await settle()
+    return draw()
+  }
+  return { Panel, ui, calls, draw, refresh, current: draw }
+}
+
+const BASE_ROUTES = {
+  'GET /meta': { fullName: 'moyuqing-man/dsh-plugin-community' },
+  'GET /plugins': { items: [], total: 0 },
+}
+
+test('面板：插件页与讨论页两个页签，未登录时讨论页给登录入口而不是空列表', async () => {
+  await withWindow('en', async () => {
+    const { draw } = await panelWith({
+      ...BASE_ROUTES,
+      'GET /me': { authenticated: false },
+    })
+
+    const tabs = findAll(draw(), (node) => node.type === 'button' && node.props.role === 'tab')
+    assert.deepEqual(
+      tabs.map((tab) => allText(tab).join('')),
+      ['Plugins', 'Discussions'],
+      '主面板必须把索引和讨论分成两个页签',
+    )
+
+    tabs[1].props.onClick()
+    const after = draw()
+    const text = allText(after).join(' ')
+    assert.match(text, /need a GitHub sign-in|needs a GitHub sign-in|Sign in with GitHub/i)
+    // 未登录不该画发帖按钮 —— 画了就是骗人
+    assert.equal(buttonByText(after, 'New post'), undefined)
+    const loginLink = findAll(
+      after,
+      (node) => node.type === 'a' && String(node.props.href || '').includes('/community/login'),
+    )[0]
+    assert.ok(loginLink, '未登录的讨论页必须给出登录入口')
+  })
+})
+
+test('面板：登录后能发新帖，并且真的 POST 到 /discussion', async () => {
+  await withWindow('en', async () => {
+    const posted = []
+    const { calls, draw, current, refresh } = await panelWith({
+      ...BASE_ROUTES,
+      'GET /me': { authenticated: true, login: 'moyuqing-man' },
+      'GET /discussions': {
+        available: true,
+        items: [],
+        totalCount: 0,
+        categories: [{ slug: 'general', name: 'General', emoji: '💬' }],
+      },
+      'POST /discussion': (n) => {
+        posted.push(n)
+        return { id: 'D_1', number: 1, url: 'https://github.com/x/y/discussions/1' }
+      },
+    })
+
+    const tab = findAll(current(), (node) => node.type === 'button' && node.props.role === 'tab')[1]
+    tab.props.onClick()
+    // 切页签只改了状态，**渲染才会去请求**；所以必须 draw → settle → draw 走一轮
+    let tree = await refresh()
+
+    const newPost = buttonByText(tree, 'New post')
+    assert.ok(newPost, '登录后应该出现发帖按钮')
+    newPost.props.onClick()
+    tree = draw()
+
+    const fields = findAll(tree, (node) => node.type === 'input' || node.type === 'textarea')
+    assert.ok(fields.length >= 2, '发帖表单要有标题和正文两个框')
+    fields[0].props.onChange({ target: { value: '我的第一个帖子' } })
+    fields[1].props.onChange({ target: { value: '正文内容' } })
+
+    tree = draw()
+    const form = findAll(tree, (node) => node.type === 'form')[0]
+    await form.props.onSubmit({ preventDefault() {} })
+    await settle()
+    tree = draw()
+
+    assert.equal(posted.length, 1, '提交一次表单只该发一次帖')
+    const call = calls.find((item) => item.method === 'POST' && item.path === '/discussion')
+    assert.ok(call, '必须打到 /api/v1/community/discussion')
+    assert.equal(call.body.title, '我的第一个帖子')
+    assert.equal(call.body.body, '正文内容')
+    assert.equal(call.body.category, 'general')
+    // 发完给个回执，不然用户不知道成没成
+    assert.match(allText(tree).join(' '), /Posted/)
+  })
+})
+
+test('面板：点开一条讨论能看到正文与回复，回复框 POST 到 /comment', async () => {
+  await withWindow('en', async () => {
+    const { calls, draw, current, refresh } = await panelWith({
+      ...BASE_ROUTES,
+      'GET /me': { authenticated: true, login: 'moyuqing-man' },
+      'GET /discussions': {
+        available: true,
+        items: [{ number: 7, title: '有人测过这个插件吗', author: 'alice', comments: 1 }],
+        categories: [],
+      },
+      'GET /thread': {
+        available: true,
+        discussion: {
+          id: 'D_7',
+          number: 7,
+          title: '有人测过这个插件吗',
+          url: 'https://github.com/x/y/discussions/7',
+          body: '我在 Android 上跑不起来。',
+          author: 'alice',
+          comments: 1,
+          reactions: 2,
+        },
+        comments: [{ id: 'DC_1', body: '试试禁用原生模块。', author: 'bob', reactions: 0 }],
+      },
+      'POST /comment': { id: 'DC_2', url: 'https://github.com/x/y/discussions/7#c2' },
+    })
+
+    findAll(current(), (node) => node.type === 'button' && node.props.role === 'tab')[1].props.onClick()
+    let tree = await refresh()
+
+    const item = buttonByText(tree, '有人测过这个插件吗')
+    assert.ok(item, '讨论列表要能点进去')
+    item.props.onClick()
+    tree = await refresh()
+
+    const text = allText(tree).join(' ')
+    assert.match(text, /我在 Android 上跑不起来/)
+    assert.match(text, /试试禁用原生模块/)
+    assert.match(text, /@alice/)
+
+    const areas = findAll(tree, (node) => node.type === 'textarea')
+    assert.ok(areas.length, '帖子里要有回复框')
+    areas[areas.length - 1].props.onChange({ target: { value: '我这边也一样。' } })
+    tree = draw()
+    const form = findAll(tree, (node) => node.type === 'form').pop()
+    await form.props.onSubmit({ preventDefault() {} })
+    await settle()
+    tree = draw()
+
+    const call = calls.find((item) => item.method === 'POST' && item.path === '/comment')
+    assert.ok(call, '回复必须打到 /api/v1/community/comment')
+    assert.equal(call.body.discussionId, 'D_7')
+    assert.equal(call.body.body, '我这边也一样。')
+    assert.match(allText(tree).join(' '), /Reply sent/)
+  })
+})
+
+test('面板：点赞发 /reaction；失败时按钮要退回去，界面不许说谎', async () => {
+  await withWindow('en', async () => {
+    const { calls, draw, current, refresh } = await panelWith({
+      ...BASE_ROUTES,
+      'GET /me': { authenticated: true, login: 'moyuqing-man' },
+      'GET /discussions': { available: true, items: [{ number: 7, title: '一条讨论', author: 'alice', comments: 0 }], categories: [] },
+      'GET /thread': {
+        available: true,
+        discussion: { id: 'D_7', number: 7, title: '一条讨论', url: 'https://github.com/x/y/discussions/7', body: '正文', author: 'alice', comments: 0, reactions: 0 },
+        comments: [],
+      },
+      // 故意失败：点赞是「锦上添花」，失败不弹错，但绝不能显示成已赞
+      'POST /reaction': { __status: 403, reason: 'FORBIDDEN', message: '没权限' },
+    })
+
+    findAll(current(), (node) => node.type === 'button' && node.props.role === 'tab')[1].props.onClick()
+    buttonByText(await refresh(), '一条讨论').props.onClick()
+    let tree = await refresh()
+
+    const like = buttonByText(tree, 'Like')
+    assert.ok(like, '帖子上要有点赞按钮')
+    assert.equal(like.props['aria-pressed'], false)
+    like.props.onClick()
+    await settle()
+    tree = draw()
+
+    const call = calls.find((item) => item.method === 'POST' && item.path === '/reaction')
+    assert.ok(call, '点赞要打到 /api/v1/community/reaction')
+    assert.equal(call.body.content, 'THUMBS_UP')
+    assert.equal(call.body.subjectId, 'D_7')
+    // 请求失败了，按钮就得还是「未赞」——否则界面上会留下一个假的已赞状态
+    const after = buttonByText(tree, 'Like')
+    assert.ok(after, '失败后按钮要回到可再次点击的状态')
+    assert.equal(after.props['aria-pressed'], false)
+  })
+})
+
+test('面板：讨论列表还没回来就点发帖，分类晚到时也要能选到（不能冻住空分类）', async () => {
+  await withWindow('en', async () => {
+    const posted = []
+    // 第一次 /discussions 故意慢 —— 模拟用户手快，在列表回来之前就点了「发新帖」
+    const { calls, refresh, current, draw } = await panelWith({
+      ...BASE_ROUTES,
+      'GET /me': { authenticated: true, login: 'moyuqing-man' },
+      'GET /discussions': (n) =>
+        n === 1
+          ? new Promise((resolve) => setTimeout(() => resolve({ available: true, items: [], categories: [] }), 5))
+          : {
+              available: true,
+              items: [],
+              categories: [
+                { slug: 'general', name: 'General', emoji: '💬' },
+                { slug: 'ideas', name: 'Ideas', emoji: '💡' },
+              ],
+            },
+      'POST /discussion': (n) => {
+        posted.push(n)
+        return { id: 'D_9', number: 9, url: 'https://github.com/x/y/discussions/9' }
+      },
+    })
+
+    findAll(current(), (node) => node.type === 'button' && node.props.role === 'tab')[1].props.onClick()
+    // 第一次渲染时 /discussions 还没回来，但「发新帖」按钮已经在了
+    draw()
+    await settle()
+    const early = draw()
+    const newPost = buttonByText(early, 'New post')
+    assert.ok(newPost, '列表没回来时也该能点发帖')
+    newPost.props.onClick()
+    let tree = draw()
+
+    // 分类这时才到；重画之后下拉框必须已经有选项，而不是空白
+    tree = await refresh()
+    const options = findAll(tree, (node) => node.type === 'option')
+    assert.ok(options.length >= 2, '分类晚到时表单也要列出可选分类')
+
+    const fields = findAll(tree, (node) => node.type === 'input' || node.type === 'textarea')
+    fields[0].props.onChange({ target: { value: '晚到的分类' } })
+    fields[1].props.onChange({ target: { value: '正文' } })
+    tree = draw()
+    await findAll(tree, (node) => node.type === 'form')[0].props.onSubmit({ preventDefault() {} })
+    await settle()
+
+    assert.equal(posted.length, 1)
+    const call = calls.find((item) => item.method === 'POST' && item.path === '/discussion')
+    // 关键：没手动选过分类时，用**第一个真实存在的分类**，而不是空串
+    assert.equal(call.body.category, 'general')
+  })
+})
+
+test('面板：插件行把作者链到作者页，并且只有非普通插件才挂类型标签', async () => {
+  await withWindow('en', async () => {
+    const { draw } = await panelWith({
+      'GET /meta': { fullName: 'moyuqing-man/dsh-plugin-community' },
+      'GET /me': { authenticated: false },
+      'GET /plugins': {
+        items: [
+          { slug: 'alice/dsh-hello', repo: 'alice/dsh-hello', name: 'dsh-hello', owner: 'alice', url: 'https://github.com/alice/dsh-hello', description: { en: 'says hi' }, stars: 12, kind: 'plugin' },
+          { slug: 'deepseek-ai/deepseek-harness', repo: 'deepseek-ai/deepseek-harness', name: 'deepseek-harness', owner: 'deepseek-ai', url: 'https://github.com/deepseek-ai/deepseek-harness', description: { en: 'the framework' }, stars: 248000, kind: 'framework' },
+        ],
+      },
+    })
+
+    const tree = draw()
+    const links = findAll(tree, (node) => node.type === 'a' && String(node.props.href || '').includes('/community/u'))
+    assert.equal(links.length, 2, '每一条插件都要能点到作者页')
+    assert.match(String(links[0].props.href), /login=alice/)
+
+    const text = allText(tree).join(' ')
+    assert.match(text, /Framework/, '框架本体要被标出来')
+    // 普通插件不挂「Plugin」标签 —— 那是噪音，标签的用处是解释排序
+    assert.equal(
+      findAll(tree, (node) => node.type === 'span' && allText(node).join('') === 'Plugin').length,
+      0,
+    )
+  })
 })
 

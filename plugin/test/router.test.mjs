@@ -44,18 +44,63 @@ function makeList(overrides = {}) {
   }
 }
 
-function makeRouter({ token = false, list = makeList(), detail = null } = {}) {
+function makeRouter({ token = false, list = makeList(), detail = null, calls = [] } = {}) {
   const indexService = {
-    list: async () => list,
+    // 把调用参数回填进返回值：真实的 indexService 会这么做，假件不回填的话
+    // 渲染层拿到的永远是构造时写死的那份，测「按 query 切换」就会测了个寂寞。
+    list: async (options = {}) => {
+      calls.push({ what: 'list', options })
+      const merged = { ...list }
+      if (options.sort !== undefined) merged.sort = options.sort
+      if (options.kind !== undefined) merged.kind = options.kind
+      if (options.category !== undefined) merged.category = options.category
+      if (options.q !== undefined) merged.query = options.q
+      return merged
+    },
     details: async () => detail,
     get: async () => ({ card }),
     stats: () => ({ sources: [{ id: 'awesome' }], known: 1, cache: 0 }),
+    sorts: ['smart', 'stars', 'downloads', 'recent', 'name'],
+    smart: 'smart',
   }
   const github = {
     hasToken: () => token,
     viewer: async () => (token ? { login: 'moyuqing-man', name: null, avatarUrl: null, htmlUrl: 'https://github.com/moyuqing-man' } : null),
     issues: async () => ({ available: true, items: [], totalCount: 0 }),
     discussions: async () => ({ available: false, reason: 'TOKEN_REQUIRED', message: '需要登录', items: [], totalCount: 0, categories: [] }),
+    /**
+     * 单条讨论：未登录时**和 discussions 一样**必须是「不可用 + 原因」，
+     * 而不是空正文 —— 否则页面会显示成「这条帖子没有内容」。
+     */
+    thread: async (repo, number) => {
+      calls.push({ what: 'thread', repo, number })
+      if (!token) {
+        return { available: false, reason: 'TOKEN_REQUIRED', message: '需要登录', comments: [] }
+      }
+      return {
+        available: true,
+        reason: null,
+        discussion: { id: 'D_1', number, title: '示例讨论', url: 'https://github.com/x/y/discussions/1', body: '正文', author: 'moyuqing-man' },
+        comments: [{ id: 'DC_1', url: 'https://github.com/x/y/discussions/1#c1', body: '一条评论', author: 'someone', reactions: 2 }],
+      }
+    },
+    /** 作者资料走 REST，所以**未登录也读得到** —— 这是与讨论列表的关键区别。 */
+    userProfile: async (login) => {
+      calls.push({ what: 'userProfile', login })
+      if (String(login).toLowerCase() === 'ghost') return { found: false, login }
+      return {
+        found: true,
+        login,
+        name: '示例用户',
+        avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4',
+        htmlUrl: `https://github.com/${login}`,
+        type: 'User',
+        bio: '写插件的',
+        repos: 12,
+        followers: 34,
+        createdAt: '2026-08-04T00:00:00Z',
+      }
+    },
   }
 
   const TOKEN = 'FAKE-TOKEN-C'
@@ -129,6 +174,18 @@ function makeRouter({ token = false, list = makeList(), detail = null } = {}) {
         createdAt: '2026-10-13T00:00:00Z',
         category: input.categorySlug ?? 'general',
         repo: 'moyuqing-man/dsh-plugin-community',
+      }
+    },
+    addComment: async (input = {}) => {
+      requireToken()
+      calls.push({ what: 'addComment', input })
+      if (!String(input.discussionId ?? '').trim()) throw badRequest('缺少 discussionId', ['discussionId'])
+      if (!String(input.body ?? '').trim()) throw badRequest('评论不能为空', ['body'])
+      return {
+        id: 'DC_kwDOtest',
+        url: 'https://github.com/moyuqing-man/dsh-plugin-community/discussions/1#discussioncomment-1',
+        createdAt: '2026-10-14T00:00:00Z',
+        replyToId: input.replyToId ?? null,
       }
     },
     addReaction: async (input = {}) => {
@@ -580,4 +637,184 @@ test('GET /plugin 既没有 repo 也没有 pkg → 400', async () => {
   const res = await router.api('plugin', ctx())
   assert.equal(res.status, 400)
   assert.equal(JSON.parse(res.body).reason, 'BAD_REQUEST')
+})
+
+/* ------------------------------ M4：发评论 / 作者 / 单帖 ------------------------------ */
+
+test('POST /comment 未登录 → 401，且一条 GraphQL 都不发', async () => {
+  const calls = []
+  const router = makeRouter({ token: false, calls })
+  const res = await router.api('comment', writeCtx({ discussionId: 'D_1', body: '你好' }))
+  assert.equal(res.status, 401)
+  assert.equal(JSON.parse(res.body).reason, 'UNAUTHORIZED')
+  assert.equal(calls.filter((c) => c.what === 'addComment').length, 0)
+})
+
+test('POST /comment 登录后把 discussionId / body / replyToId 原样交给 writer', async () => {
+  const calls = []
+  const router = makeRouter({ token: true, calls })
+  const res = await router.api(
+    'comment',
+    writeCtx({ discussionId: 'D_1', body: ' 有道理 ', replyToId: 'DC_parent' }),
+  )
+  assert.equal(res.status, 201)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.data.id, 'DC_kwDOtest')
+  const seen = calls.find((c) => c.what === 'addComment')
+  assert.equal(seen.input.discussionId, 'D_1')
+  assert.equal(seen.input.replyToId, 'DC_parent')
+})
+
+test('POST /comment 缺 body → 400（不能发出一句空评论）', async () => {
+  const router = makeRouter({ token: true })
+  const res = await router.api('comment', writeCtx({ discussionId: 'D_1', body: '   ' }))
+  assert.equal(res.status, 400)
+})
+
+test('POST /comment 不要求 application/json 之外的任何东西也照样被 CSRF 挡下', async () => {
+  // 跨站表单只能发 simple request —— 没有 application/json 就不放行
+  const router = makeRouter({ token: true })
+  const res = await router.api('comment', ctx({ method: 'POST', contentType: 'text/plain', readBody: async () => '{}' }))
+  assert.equal(res.status, 403)
+})
+
+test('GET /thread 未登录 → available:false 且带原因，不是空正文', async () => {
+  const router = makeRouter({ token: false })
+  const res = await router.api('thread', ctx({ query: { repo: 'a/b', number: '1' } }))
+  assert.equal(res.status, 200)
+  const data = JSON.parse(res.body).data
+  assert.equal(data.available, false)
+  assert.equal(data.reason, 'TOKEN_REQUIRED')
+})
+
+test('GET /thread 登录后返回正文与评论', async () => {
+  const calls = []
+  const router = makeRouter({ token: true, calls })
+  const res = await router.api('thread', ctx({ query: { repo: 'a/b', number: '3' } }))
+  const data = JSON.parse(res.body).data
+  assert.equal(data.available, true)
+  assert.equal(data.discussion.body, '正文')
+  assert.equal(data.comments.length, 1)
+  assert.equal(calls.find((c) => c.what === 'thread').number, 3)
+})
+
+test('GET /thread 缺 repo 或缺 number → 400', async () => {
+  const router = makeRouter({ token: true })
+  assert.equal((await router.api('thread', ctx({ query: { number: '1' } }))).status, 400)
+  assert.equal((await router.api('thread', ctx({ query: { repo: 'a/b' } }))).status, 400)
+  assert.equal((await router.api('thread', ctx({ query: { repo: 'a/b', number: '0' } }))).status, 400)
+})
+
+test('GET /user 未登录也能读到资料 —— 作者页走 REST，不吃 GraphQL 配额', async () => {
+  const router = makeRouter({ token: false })
+  const res = await router.api('user', ctx({ query: { login: 'moyuqing-man' } }))
+  assert.equal(res.status, 200)
+  const data = JSON.parse(res.body).data
+  assert.equal(data.profile.found, true)
+  assert.equal(data.profile.followers, 34)
+  // 隐私字段一个都不该出现
+  assert.doesNotMatch(JSON.stringify(data), /email|@qq\.com/)
+})
+
+test('GET /user 会把他名下的索引条目一起算出来', async () => {
+  const list = makeList({
+    items: [
+      { ...card, owner: 'moyuqing-man' },
+      { ...card, slug: 'other/x', owner: 'someone-else' },
+    ],
+    total: 2,
+  })
+  const router = makeRouter({ list })
+  const res = await router.api('user', ctx({ query: { login: 'moyuqing-man' } }))
+  const data = JSON.parse(res.body).data
+  assert.equal(data.count, 1)
+  assert.equal(data.plugins[0].owner, 'moyuqing-man')
+})
+
+test('GET /user 的 GitHub 查不到时 found:false，但索引条目不因此消失', async () => {
+  const router = makeRouter({ list: makeList({ items: [{ ...card, owner: 'ghost' }] }) })
+  const res = await router.api('user', ctx({ query: { login: 'ghost' } }))
+  assert.equal(res.status, 200)
+  const data = JSON.parse(res.body).data
+  assert.equal(data.profile.found, false)
+  assert.equal(data.count, 1)
+})
+
+test('GET /user 缺 login → 400', async () => {
+  const router = makeRouter()
+  assert.equal((await router.api('user', ctx())).status, 400)
+})
+
+test('GET /plugins 默认用 smart 排序，并回传排序清单与类型统计', async () => {
+  const calls = []
+  const list = makeList({
+    facets: { categories: [], kinds: [{ kind: 'plugin', label: { zh: '插件', en: 'Plugin' }, count: 1 }], archived: 0, withNpm: 1 },
+  })
+  const router = makeRouter({ list, calls })
+  const res = await router.api('plugins', ctx())
+  const body = JSON.parse(res.body)
+  assert.equal(calls[0].options.sort, 'smart')
+  assert.deepEqual(body.data.sorts, ['smart', 'stars', 'downloads', 'recent', 'name'])
+  assert.equal(body.data.facets.kinds[0].kind, 'plugin')
+})
+
+test('GET /plugins 的 kind 过滤被透传（空值也照样透传，交给 service 判断）', async () => {
+  const calls = []
+  const router = makeRouter({ calls })
+  await router.api('plugins', ctx({ query: { kind: 'framework' } }))
+  assert.equal(calls[0].options.kind, 'framework')
+})
+
+test('GET /community/u/:login 页面渲染作者名、资料与索引条目', async () => {
+  const list = makeList({ items: [{ ...card, owner: 'moyuqing-man' }] })
+  const router = makeRouter({ list })
+  const res = await router.page('u', ctx({ query: { login: 'moyuqing-man' }, wantsHtml: true }))
+  assert.equal(res.status, 200)
+  assert.match(res.body, /moyuqing-man/)
+  assert.match(res.body, /示例用户/)
+  assert.match(res.body, /AnonyJcy\/dsh-j-space/)
+})
+
+test('作者页在 GitHub 资料读不到时照样 200 —— 拿不到头像不该让整页 502', async () => {
+  const calls = []
+  const list = makeList({ items: [{ ...card, owner: 'ghost' }] })
+  const router = makeRouter({ list, calls })
+  const res = await router.page('u', ctx({ query: { login: 'ghost' }, wantsHtml: true }))
+  assert.equal(res.status, 200)
+  assert.match(res.body, /ghost/)
+  // 索引里的条目仍然在
+  assert.match(res.body, /AnonyJcy\/dsh-j-space/)
+  assert.equal(calls.filter((c) => c.what === 'userProfile').length, 1)
+})
+
+test('GET /community/u 缺 login → 400', async () => {
+  const router = makeRouter()
+  const res = await router.page('u', ctx({ wantsHtml: true }))
+  assert.equal(res.status, 400)
+})
+
+test('索引页默认显示「综合排序」的说明条，切到按 star 就收起来', async () => {
+  const router = makeRouter({
+    list: makeList({
+      sort: 'smart',
+      facets: { categories: [{ slug: 'ui', count: 1 }], kinds: [{ kind: 'plugin', label: { zh: '插件', en: 'Plugin' }, count: 1 }], archived: 0, withNpm: 1 },
+    }),
+  })
+  const smart = await router.page('', ctx({ query: {}, wantsHtml: true }))
+  assert.equal(smart.status, 200)
+  assert.match(smart.body, /主题标签|topic:dsh-plugin|自我声明/)
+
+  const byStars = await router.page('', ctx({ query: { sort: 'stars' }, wantsHtml: true }))
+  assert.equal(byStars.status, 200)
+  assert.doesNotMatch(byStars.body, /自我声明/)
+})
+
+test('索引页把作者名链到作者页，并且类型标签只在「不是普通插件」时出现', async () => {
+  const plugin = { ...card, kind: 'plugin' }
+  const framework = { ...card, slug: 'deepseek-ai/deepseek-harness', owner: 'deepseek-ai', kind: 'framework', name: 'deepseek-harness' }
+  const router = makeRouter({ list: makeList({ items: [plugin, framework] }) })
+  const res = await router.page('', ctx({ wantsHtml: true }))
+  assert.match(res.body, /\/community\/u\?login=AnonyJcy/)
+  assert.match(res.body, /框架本体/)
 })

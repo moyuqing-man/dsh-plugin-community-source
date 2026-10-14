@@ -10,6 +10,7 @@
  */
 
 import { SORTS } from './normalize.js'
+import { applyKinds, compareRank, excludeRepos, KIND_LABELS } from './rank.js'
 import { DEFAULT_SOURCES, createSourceLoader, sourceIds } from './sources/index.js'
 
 export const PAGE_SIZE_DEFAULT = 30
@@ -66,25 +67,50 @@ export function createIndexService({ http, cache, github, logger, config = {} })
   const activeSources = configured.filter((id) => known.has(id))
   const sources = activeSources.length ? activeSources : [...DEFAULT_SOURCES]
 
+  /**
+   * 索引治理配置。`rankOptions` 一路传给 rank.js 的纯函数，
+   * `excludeRepos` 默认空 —— 框架是被降级不是被删掉（见 rank.js 文件头）。
+   */
+  const frameworks = Array.isArray(config.frameworks) && config.frameworks.length
+    ? config.frameworks
+    : undefined
+  const excludes = Array.isArray(config.excludeRepos) ? config.excludeRepos : []
+  const rankOptions = frameworks ? { frameworks } : {}
+
+  /** sort=smart 之外的既有排序仍然保持原样，只有 smart 走混合评分。 */
+  const SMART = 'smart'
+  const SORT_IDS = [...Object.keys(SORTS), SMART]
+
   const knownSummary = new Map()
 
   function remember(result) {
     for (const card of result.cards) knownSummary.set(card.slug, card)
   }
 
+  /**
+   * 分类统计里补上「类型」维度：插件 / 框架本体 / 聚合清单 / 未归类。
+   * 单独统计而不是混进 `categories`，因为两者是正交的 ——
+   * 一个仓库可以既是「界面类」又是「框架本体」。
+   */
   function facets(cards) {
     const byCategory = new Map()
     let archived = 0
     let withNpm = 0
+    const byKind = new Map()
     for (const card of cards) {
       const key = card.category || 'uncategorized'
       byCategory.set(key, (byCategory.get(key) ?? 0) + 1)
       if (card.archived) archived += 1
       if (card.npm) withNpm += 1
+      const kind = card.kind || 'unknown'
+      byKind.set(kind, (byKind.get(kind) ?? 0) + 1)
     }
     return {
       categories: [...byCategory.entries()]
         .map(([slug, count]) => ({ slug, count }))
+        .sort((a, b) => b.count - a.count),
+      kinds: [...byKind.entries()]
+        .map(([kind, count]) => ({ kind, label: KIND_LABELS[kind] ?? { zh: '', en: '' }, count }))
         .sort((a, b) => b.count - a.count),
       archived,
       withNpm,
@@ -95,7 +121,8 @@ export function createIndexService({ http, cache, github, logger, config = {} })
     const {
       q = '',
       category = '',
-      sort = 'stars',
+      kind = '',
+      sort = SMART,
       page = 1,
       perPage = PAGE_SIZE_DEFAULT,
       force = false,
@@ -105,11 +132,14 @@ export function createIndexService({ http, cache, github, logger, config = {} })
     const snapshot = await loader.loadAll(requested ?? sources, { force })
     remember(snapshot)
 
-    const searched = q ? snapshot.cards.filter((card) => matches(card, q)) : snapshot.cards
+    // 先标类型再过滤/排序：`kind` 过滤与 `smart` 排序都依赖这两个字段。
+    const graded = excludeRepos(applyKinds(snapshot.cards, rankOptions), excludes)
+    const searched = q ? graded.filter((card) => matches(card, q)) : graded
     const facetData = facets(searched)
-    const filtered = category ? searched.filter((card) => card.category === category) : searched
+    const byCategory = category ? searched.filter((card) => card.category === category) : searched
+    const filtered = kind ? byCategory.filter((card) => card.kind === kind) : byCategory
 
-    const comparator = SORTS[sort] ?? SORTS.stars
+    const comparator = sort === SMART ? (a, b) => compareRank(a, b, rankOptions) : (SORTS[sort] ?? SORTS.stars)
     const sorted = [...filtered].sort(comparator)
 
     const size = Math.min(Math.max(Number(perPage) || PAGE_SIZE_DEFAULT, 1), PAGE_SIZE_MAX)
@@ -127,6 +157,7 @@ export function createIndexService({ http, cache, github, logger, config = {} })
       sort,
       query: q,
       category,
+      kind,
       facets: facetData,
       sources: snapshot.sources,
       errors: snapshot.errors,
@@ -147,10 +178,13 @@ export function createIndexService({ http, cache, github, logger, config = {} })
     }
     if (!card) return null
 
-    if (!withGithub) return { card }
+    // 详情页也要带 `kind`，否则「框架本体」标签只在列表页出现。
+    const graded = applyKinds([card], rankOptions)[0]
+
+    if (!withGithub) return { card: graded }
 
     const meta = await github.repoMeta(card.repo, { force })
-    return { card: applyMeta(card, meta), meta }
+    return { card: graded, meta }
   }
 
   async function details(slug, { force = false } = {}) {
@@ -187,8 +221,11 @@ export function createIndexService({ http, cache, github, logger, config = {} })
       sources: sources.map((id) => ({ id })),
       known: knownSummary.size,
       cache: cache.size,
+      sorts: SORT_IDS,
+      smart: SMART,
+      excludes,
     }
   }
 
-  return { list, get, details, prewarm, stats, sources }
+  return { list, get, details, prewarm, stats, sources, sorts: SORT_IDS, smart: SMART }
 }

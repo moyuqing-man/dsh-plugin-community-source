@@ -45,9 +45,12 @@ cannot be installed, and pulling in a build tool just to ship would add CI depen
 | Login (GitHub Device Flow, 8-character code) | ✅ works (**requires `clientId` to be configured** — see below) |
 | Actually posting / commenting / reacting | ✅ works (`public_repo` scope) |
 | Sidebar entry + main-panel community page (`sidebar.panellist` + `main`) | ✅ works |
+| **Posting / commenting / liking inside the panel** (without jumping to GitHub) | ✅ code ready, **awaiting a real signed-in run** |
 | Community discussion embedded in the plugin detail page (without leaving it) | ✅ works |
-| Agent tools (`community_search` and 3 more) | ⏳ M4 |
-| Publish to npm | ⏳ M4 |
+| **Author profile page** `/community/u?login=` | ✅ works (REST-backed, **readable while logged out**) |
+| **Index ranking work** (`sort=smart`: framework repos and aggregator lists are ranked down) | ✅ works |
+| Agent tools (`community_search` and 3 more) | ✅ registered |
+| Publish to npm | ⏳ one `npm publish` away (the credential steps are yours) |
 
 **When `clientId` is not configured it neither crashes nor pretends to be able to log you in**: the
 page spells out the setup steps (5 of them, and step 4 — "tick Enable Device Flow" — is the one
@@ -104,12 +107,18 @@ Then restart DSH and open `http://127.0.0.1:<port>/community`.
 | `repo` | `dsh-plugin-community` | Name of the community repository |
 | `allowRemote` | `false` | **Localhost-only by default.** Exposing it to your phone/LAN requires explicitly setting `true` |
 | `cacheTtlMinutes` | `60` | How long an index stays fresh |
-| `sources` | `['github-topic','awesome']` | Which index sources to enable |
+| `sources` | `['github-topic','awesome']` | Which index sources to enable (3 of the 6 are marked `optIn` and off by default) |
+| `frameworks` | `['deepseek-ai/deepseek-harness']` | Which repositories are **the framework itself** rather than a plugin: still listed, still filterable, ranked down under smart ordering |
+| `excludeRepos` | `[]` | Repositories to **remove entirely** from the list. Empty by default — ranking down instead of deleting is deliberate |
 | `userAgent` | `dsh-plugin-community/0.1.0` | UA sent with GitHub requests |
 | `prewarm` | `true` | Warm the large sources shortly after startup |
 
 `owner` / `repo` **are configuration, not hardcoded** — switching repositories means changing those
 two lines and nothing else.
+`frameworks` / `excludeRepos` are not about making the data look tidy: `topic:dsh-plugin` is a
+**self-declared** label anyone can add, so the official framework `deepseek-ai/deepseek-harness` sits
+at the top permanently. `sort=smart` is what pushes it — and "aggregator list" repositories — down.
+The reasoning is recorded in the header comment of `lib/core/rank.js`.
 
 ---
 
@@ -119,10 +128,13 @@ two lines and nothing else.
 
 | Path | Meaning |
 |---|---|
-| `/community` | Plugin list; accepts `?q=&category=&sort=&page=` |
+| `/community` | Plugin list; accepts `?q=&category=&kind=&sort=&page=` |
 | `/community/plugin?repo=owner/name` | Plugin detail |
-| `/community/t?id=<discussion>` | 302 redirect to GitHub — **discussion bodies are never re-hosted here** |
-| `/community/u?login=<user>` | Posts by author |
+| `/community/t?id=<discussion>` | 302 redirect to GitHub — **discussion bodies are never re-hosted here** (`/thread` is the endpoint that reads one locally) |
+| `/community/u?login=<user>` | Author profile plus their indexed entries. **Backed by REST public user info, readable while logged out** |
+
+`sort` accepts `smart` (default) / `stars` / `downloads` / `recent` / `name`.
+`kind` accepts empty (all) / `plugin` / `framework` / `aggregator` / `unknown`.
 
 The pages contain **zero front-end JS**: search is a `<form method="get">`, paging and filtering are
 `<a>` links.
@@ -140,8 +152,11 @@ current search terms and filters over**, so switching never throws away your res
 | `/api/v1/community/plugins` | GET | List |
 | `/api/v1/community/plugin` | GET | One plugin; `?repo=owner/name` or **`?pkg=<npm package name>`** (see below) |
 | `/api/v1/community/meta` | GET | Public configuration facts (repo URL, prefix, whether a clientId is set); **public values only** |
-| `/api/v1/community/discussions` | GET | Discussion list |
+| `/api/v1/community/discussions` | GET | Discussion list (**unreadable while logged out**; returns `available:false` honestly) |
 | `/api/v1/community/discussion` | GET / POST | Read / post (POST returns **201**) |
+| `/api/v1/community/thread` | GET | One discussion's body + comments (`?repo=&number=`); also honest when logged out |
+| `/api/v1/community/comment` | POST | Comment / nested reply (`discussionId` + `body` + optional `replyToId`, 201) |
+| `/api/v1/community/user` | GET | Author profile + their indexed entries (`?login=`); **readable while logged out**, and **never returns an email** |
 | `/api/v1/community/reaction` | POST | React (one of 8) |
 | `/api/v1/community/issues` | GET | Issue list |
 | `/api/v1/community/me` | GET | Current login state (**never returns a token**) |
@@ -180,7 +195,7 @@ lookup works out of the box.
 | Seat | Registration id / key | What it does |
 |---|---|---|
 | `sidebar.panellist` | `community` (order 30) | Sidebar icon; **its id matches the main panel's key, and DSH wires the two together automatically** |
-| `main` | key `community` | Main-panel community page (search + list + link to the full page) |
+| `main` | key `community` | Main-panel community page: **two tabs, Plugins and Discussions**. The plugins tab has search + sort + kind filter + skeleton rows; the discussions tab offers a sign-in entry when logged out (no compose box is drawn) and, once signed in, a composer, a single-thread view, a comment box and like buttons |
 | `plugins.detail.badge` | `community` (order 20) | Badge next to the plugin title; **renders null** when there is no matching plugin |
 | `plugins.detail.section` | `community` (order 40) | Community block on the detail page: stars, issues, discussions, known issues |
 | `settings.section` | `community` (order 45) | Settings page: community repo URL + login/logout |
@@ -265,11 +280,21 @@ A few deliberate decisions:
 
 ## Known limitations
 
-- **Sorting by stars puts the framework itself on top.** `topic:dsh-plugin` is self-declared
-  (GitHub's matching is exact — verified), and `deepseek-ai/deepseek-harness` carries the tag too.
-  19,055 repositories in the ecosystem carry this topic, so "hottest plugins" ends up mixed with a
-  lot of large repositories that are not plugins. The default sort stays on stars (it is the
-  intuitive one); a blended score or a configurable exclusion list is planned.
+- **The default is `sort=smart`, not stars.** Reason: `topic:dsh-plugin` is self-declared
+  (GitHub's matching is exact — verified), and `deepseek-ai/deepseek-harness` carries the tag too, so
+  "hottest plugin" was permanently the framework itself. 19,055 repositories in the ecosystem carry
+  this topic. `smart` ranks three categories **down rather than deleting them** — the framework
+  itself, aggregator lists, and "nothing says this is a plugin". Saying "it is here, but it is not a
+  plugin" beats pretending it does not exist. `?sort=stars` is still a **pure star sort**, one click away.
+- **`smart` is a heuristic; it will miss in both directions.** A known edge: the repository it puts
+  first, `tt-a1i/archify`, is really an agent skill for Claude Code / Codex that carries the
+  `dsh-plugin` topic and publishes an npm package — meaning the "has an npm package" signal can be
+  satisfied by a project with nothing DSH-specific in it. Same story for `volcengine/OpenViking` and
+  `Tencent/WeKnora` (general AI projects carrying the topic). The criteria were not changed, because
+  telling a real DSH plugin apart needs a harder source than a topic (upstream catalogue inclusion,
+  the install context in a README) and those three upstreams are unreachable from this machine.
+  Until then, the line at the bottom of the page — "provided as-is with no human review" — is the
+  honest boundary of this ordering.
 - **The unauthenticated quota is a hard wall**: `api.github.com` allows 60 requests per hour and
   10 per minute on the search bucket (counted per egress IP). So the list page eats only the indexes
   and only the detail page fetches live metadata — otherwise 30 cards would burn an hour's quota.
@@ -281,7 +306,7 @@ A few deliberate decisions:
 ## Development
 
 ```bash
-node --test "test/*.test.mjs"     # 151 tests
+node --test "test/*.test.mjs"     # 193 tests
 node scripts/pack-check.mjs       # pre-publish check: pack list + relative-import graph + manifest fields
 ```
 
@@ -290,18 +315,21 @@ node scripts/pack-check.mjs       # pre-publish check: pack list + relative-impo
 
 Test coverage: text and URL safety, card normalisation and merging, the error envelope, caching
 (stale fallback and concurrent de-duplication), index parsing (6 sources + install-command parsing),
-routing (JSON/HTML/status codes/works with JS off), host wiring (route registration and teardown,
-localhost restriction, still renders when every upstream is down), the write path (idempotency /
-write spacing / never retried / GraphQL errors hidden inside a 200), Device Flow (code never leaks /
-cold-start polling blocked locally / `slow_down` increases the interval), **languages** (resolution
-and precedence / identical key sets in zh and en / no Chinese characters on English pages / plural
-handling in relative times), the **client half** (bundle shape / zero dependencies / seven seats /
-requires react and nothing else / a language override is remembered / **tool-card keys match the
-host tool names exactly** plus all three phases and bad shapes), and the **publish boundary**
-(every packed file exists on disk, `test/` and `node_modules/` stay out, size ceiling, zero runtime
-dependencies, the entry point is always in the package).
+**ranking** (the down-grade factors for framework / aggregator / unknown, the confidence weights, a
+stable sort), routing (JSON/HTML/status codes/works with JS off, single thread and comments, the
+author page, the `kind` filter), host wiring (route registration and teardown, localhost restriction,
+still renders when every upstream is down), the write path (idempotency / write spacing / never
+retried / GraphQL errors hidden inside a 200), Device Flow (code never leaks / cold-start polling
+blocked locally / `slow_down` increases the interval), **languages** (resolution and precedence /
+identical key sets in zh and en / no Chinese characters on English pages / plural handling in relative
+times), the **client half** (bundle shape / zero dependencies / seven seats / requires react and
+nothing else / a language override is remembered / **tool-card keys match the host tool names
+exactly** plus all three phases and bad shapes + tab switching / posting / commenting / a failed like
+reverting the button / author links), and the **publish boundary** (every packed file exists on disk,
+`test/` and `node_modules/` stay out, size ceiling, zero runtime dependencies, the entry point is
+always in the package).
 
-**151 tests** in total.
+**193 tests** in total.
 
 Every index source's `parse()` is a pure function tested against offline fixtures — no network needed.
 The client half is tested by swapping `globalThis.window.__ModuleLoader__` and capturing the bundle,
