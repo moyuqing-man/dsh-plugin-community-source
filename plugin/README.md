@@ -269,9 +269,15 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 ## 开发
 
 ```bash
-node --test "test/*.test.mjs"     # 193 个测试
-node scripts/pack-check.mjs       # 发布前自检：打包清单 + 相对 import 图 + 清单字段
+node --test "test/*.test.mjs"           # 202 个测试
+node scripts/pack-check.mjs             # 发布前自检：打包清单 + 相对 import 图 + 清单字段
+node scripts/verify-tarball.mjs [tgz]   # 更强的一步：从真实 tgz 解包并真的 import + apply 一次
 ```
+
+> `verify-tarball.mjs` 不传参数时会先自己跑一次 `pnpm pack`（本机只有 pnpm，
+> DSH 运行时里没有 npm CLI）。它比 `pack-check.mjs` 多证明一件事：
+> **解出来的那棵树真的能被加载** —— 4 条路由与 4 个 Agent 工具都会注册一遍，
+> 并且用的是 `cordis.patch.yml` 里那份**安装时真正生效的配置**。
 
 > Windows 上别用 `node --test test/`，Node 24 会把它当成模块路径解析然后报
 > `Cannot find module ...\test`。用 glob 形式。
@@ -286,9 +292,11 @@ GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启�
 **工具卡片的 key 与 host 工具名一一对应** + 三种 phase 的渲染 + 坏形状不抛错 +
 页签切换 / 发帖 POST / 评论 POST / 点赞失败退回 / 作者链接），
 以及 **发布边界**（包内文件都在磁盘上、`test/` 与 `node_modules/` 不进包、体积上限、
-零运行时依赖、entry point 一定在包里）。
+零运行时依赖、entry point 一定在包里）、**解包验证**（`cordis.patch.yml` 的解析 /
+块序列与布尔类型 / 解析出的键必须与 `lib/index.js` 的 `Config` 对得上 /
+从工作区能 import + apply 并注册出 4 条路由与 4 个工具）。
 
-一共 **193 个测试**。
+一共 **202 个测试**。
 
 索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网。
 client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bundle 截下来跑，**也不需要浏览器**。

@@ -306,9 +306,15 @@ A few deliberate decisions:
 ## Development
 
 ```bash
-node --test "test/*.test.mjs"     # 193 tests
-node scripts/pack-check.mjs       # pre-publish check: pack list + relative-import graph + manifest fields
+node --test "test/*.test.mjs"           # 202 tests
+node scripts/pack-check.mjs             # pre-publish check: pack list + relative-import graph + manifest fields
+node scripts/verify-tarball.mjs [tgz]   # stronger: unpack a real tgz and actually import + apply it once
 ```
+
+> With no argument, `verify-tarball.mjs` runs `pnpm pack` itself (this machine only has pnpm — the DSH
+> runtime ships no npm CLI). It proves one thing `pack-check.mjs` cannot: **the unpacked tree really
+> loads** — all 4 routes and all 4 Agent tools register, using the config from `cordis.patch.yml`,
+> i.e. the one that is actually in effect at install time.
 
 > On Windows do not use `node --test test/` — Node 24 resolves it as a module path and fails with
 > `Cannot find module ...\test`. Use the glob form.
@@ -325,11 +331,13 @@ identical key sets in zh and en / no Chinese characters on English pages / plura
 times), the **client half** (bundle shape / zero dependencies / seven seats / requires react and
 nothing else / a language override is remembered / **tool-card keys match the host tool names
 exactly** plus all three phases and bad shapes + tab switching / posting / commenting / a failed like
-reverting the button / author links), and the **publish boundary** (every packed file exists on disk,
+reverting the button / author links), the **publish boundary** (every packed file exists on disk,
 `test/` and `node_modules/` stay out, size ceiling, zero runtime dependencies, the entry point is
-always in the package).
+always in the package), and **tarball verification** (parsing `cordis.patch.yml` / block sequences and
+boolean types / every parsed key must match a `Config` key in `lib/index.js` / the workspace imports
+and applies, registering 4 routes and 4 tools).
 
-**193 tests** in total.
+**202 tests** in total.
 
 Every index source's `parse()` is a pure function tested against offline fixtures — no network needed.
 The client half is tested by swapping `globalThis.window.__ModuleLoader__` and capturing the bundle,
