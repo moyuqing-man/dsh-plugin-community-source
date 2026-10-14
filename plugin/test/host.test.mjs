@@ -88,6 +88,73 @@ test('manifest：name / inject / Config 的形状就是 DSH 插件契约要求�
   assert.equal(Config.repo, 'dsh-plugin-community')
 })
 
+/*
+ * 这两条是**真机跑出来的** bug 的回归测试，不是凭空补的覆盖率。
+ * 它们守的东西用假 ctx 手写测试永远碰不到，因为假 ctx 是个普通对象，
+ * 而真机上 `ctx` 是 cordis 的 Proxy、`Config` 会被加载器当成 Standard Schema 解析。
+ */
+
+test('Config 必须是 Standard Schema：真实加载器会调 Config[\'~standard\'].validate 后才挂载', () => {
+  // 真机症状：Config 只是普通对象时，resolveConfig 里这句抛
+  //   TypeError: Cannot read properties of undefined (reading 'validate')
+  // 整个插件静默不激活，启动日志只留一行 `warning: 1 entry did not activate`，
+  // 所有页面 404 —— 本地测试全绿也照样发不出去。
+  const standard = Config['~standard']
+  assert.ok(standard, "Config 上必须有 '~standard'，否则真实加载器读 .validate 时会抛")
+  assert.equal(standard.version, 1)
+  assert.equal(typeof standard.validate, 'function')
+
+  // validate 拿到合法配置要原样放行
+  const good = standard.validate({ owner: 'o', repo: 'r', sources: ['github-topic'] })
+  assert.equal(good.value.owner, 'o')
+  assert.equal(good.value.repo, 'r')
+
+  // 拿到垃圾也不能抛 —— 配置写错一个字段不该让插件加载失败，应退化成默认值
+  for (const bad of [undefined, null, 'nope', 42, [], { sources: 'not-an-array' }]) {
+    const result = standard.validate(bad)
+    assert.ok(result && typeof result === 'object', `validate(${JSON.stringify(bad)}) 应返回对象`)
+    assert.equal(result.value.owner, Config.owner)
+    assert.ok(Array.isArray(result.value.sources))
+    assert.deepEqual(result.value.sources, Config.sources)
+  }
+
+  // 非枚举：不能污染 Object.keys（否则「patch 里的键必须与 Config 对得上」那条测试会被带偏），
+  // 也不能被 { ...Config } 展开成一个配置项
+  assert.ok(!Object.keys(Config).includes('~standard'))
+  assert.equal({ ...Config }['~standard'], undefined)
+})
+
+test('ctx 是 Proxy、未 inject 的服务访问会抛错时，apply 不能因此挂掉', async () => {
+  // 真机症状：cordis 的 ctx Proxy 对**没写进 inject 的服务名一律抛**
+  //   Error: cannot get property "credentials" without inject
+  // （app.asar 内 @deepseek-ai/cordis/lib/index.js:676 的 get 陷阱）
+  // 于是过去写的 `ctx.credentials ?? null` 直接炸掉整个插件的激活。
+  const inner = makeCtx()
+  const ctx = new Proxy(inner, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'symbol' || prop in target) return Reflect.get(target, prop, receiver)
+      // 未 inject 的普通 JSON 属性 —— 模仿真机，抛。
+      if (['credentials', 'tools', 'slash'].includes(String(prop))) {
+        throw new Error(`cannot get property "${String(prop)}" without inject`)
+      }
+      return Reflect.get(target, prop, receiver)
+    },
+  })
+  // get() 才是安全查询接口，真机上它同样对未注册服务返回 undefined（不抛）
+  ctx.get = () => undefined
+
+  let api = null
+  await withStubbedFetch(async () => {
+    api = apply(ctx, { sources: ['github-topic'], prewarm: false })
+  })
+
+  // 页面照常注册 —— 少两个可选服务不该拖垮核心能力
+  assert.equal(ctx.routes.length, 4)
+  // 可选服务退化到 null / 默认行为，而不是抛出去
+  assert.equal(api.tokenStore.accessToken(), null)
+  assert.equal(api.toolDefinitions.length, 4)
+})
+
 test('注册 4 条路由：两条 prefix 覆盖子路径，两条 exact 保证裸路径', async () => {
   const ctx = makeCtx()
   await withStubbedFetch(async () => {

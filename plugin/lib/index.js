@@ -57,6 +57,39 @@ export const Config = {
 }
 
 /**
+ * 让 `Config` 同时是一个 **Standard Schema v1**。
+ *
+ * 为什么非加不可（这是真机跑出来的，不是推测）：
+ * 真实 cordis 加载器在挂载前会调用
+ *     runtime.Config['~standard'].validate(config)
+ * （见 app.asar 内 `@deepseek-ai/cordis/lib/index.js:956-961` 的 `resolveConfig`）。
+ * `Config` 只是个普通对象时，这一行直接抛
+ *     TypeError: Cannot read properties of undefined (reading 'validate')
+ * 整个插件**静默不激活**（启动日志只留一行 `warning: 1 entry did not activate`，
+ * 页面全部 404）。本地假 ctx 测试永远发现不了这一点，因为那只调 `apply()`，
+ * 不经过加载器的配置解析。真机验证脚本 `scripts/verify-tarball.mjs` 当时也没覆盖。
+ *
+ * 实现故意的两个选择：
+ *   1. **不 import schemastery**。本插件的硬约束是零依赖 + 不 import
+ *      `@deepseek-ai/*`（否则没有 DSH 环境时本地跑不了测试）。Standard Schema
+ *      只是一个 `{version, vendor, validate}` 的对象，手写 10 行就够。
+ *   2. **非枚举属性**。`Object.defineProperty` 默认 `enumerable: false`，
+ *      所以 `Object.keys(Config)` 仍然只返回配置键 —— 现有的
+ *      「patch 里的键必须与 Config 对得上」那条测试不会被这个元数据带偏，
+ *      `{...Config}` 展开时也不会把它当成一个配置项。
+ *
+ * `validate` **永不抛错**：配置写错一个字段不该让整个插件加载失败，
+ * 应该退化成默认值继续跑（`normalizeConfig` 就是这么做的）。
+ */
+Object.defineProperty(Config, '~standard', {
+  value: {
+    version: 1,
+    vendor: 'dsh-plugin-community',
+    validate: (value) => ({ value: normalizeConfig(value) }),
+  },
+})
+
+/**
  * 只注册 4 条路由。
  *
  * 契约来自 cordis_inspect_query → host / Service / webServer：
@@ -90,6 +123,36 @@ function normalizeConfig(raw = {}) {
   const ttl = Number(config.cacheTtlMinutes)
   config.cacheTtlMs = Number.isFinite(ttl) && ttl > 0 ? ttl * 60_000 : 60 * 60_000
   return config
+}
+
+/**
+ * 读一个**可选**宿主服务。拿不到就返回 null，绝不抛错。
+ *
+ * 这是真机跑出来的教训，值得写清楚：
+ * cordis 的 `ctx` 是 Proxy，**没写进 `inject` 的服务名一律抛错** ——
+ *     Error: cannot get property "credentials" without inject
+ * （见 app.asar 内 `@deepseek-ai/cordis/lib/index.js:676` 的 Proxy get 陷阱）
+ * 所以过去写的 `ctx.credentials ?? null` 这种「拿不到就是 null」的写法在真机上
+ * 是**直接抛异常**，整个插件不激活。`ctx.get(name)` 才是安全的查询接口。
+ *
+ * 注意顺序：`ctx.get` 在前，属性访问只作为老版本 ctx 的兜底，
+ * 且**必须包在 try/catch 里**（有些 ctx 实现连属性访问都会抛）。
+ */
+function optionalService(ctx, name) {
+  if (ctx && typeof ctx.get === 'function') {
+    try {
+      const value = ctx.get(name)
+      if (value) return value
+    } catch {
+      /* 没这个服务，正常 */
+    }
+  }
+  try {
+    return ctx?.[name] ?? null
+  } catch {
+    // 未 inject 的 Proxy 陷阱会走到这里 —— 这不是错误，只是「没有」
+    return null
+  }
 }
 
 /** loopback 判定沿用 dsh-workspace 的做法（含 IPv4-mapped 形式）。 */
@@ -145,14 +208,7 @@ export function apply(ctx, rawConfig = {}) {
 
   // credentials 是**可选**依赖：拿不到就退到内存模式（重启后要重新登录），
   // 而不是让整个插件加载失败。
-  let credentials = ctx.credentials ?? null
-  if (!credentials && typeof ctx.get === 'function') {
-    try {
-      credentials = ctx.get('credentials') ?? null
-    } catch {
-      credentials = null
-    }
-  }
+  const credentials = optionalService(ctx, 'credentials')
 
   const tokenStore = createTokenStore({ credentials, logger })
   const github = createGithub({ http, cache, logger, getToken: () => tokenStore.accessToken() })
@@ -193,14 +249,7 @@ export function apply(ctx, rawConfig = {}) {
    */
   const toolDefinitions = createToolDefinitions({ indexService, github, writer, auth, config })
 
-  let tools = ctx.tools ?? null
-  if (!tools && typeof ctx.get === 'function') {
-    try {
-      tools = ctx.get('tools') ?? null
-    } catch {
-      tools = null
-    }
-  }
+  const tools = optionalService(ctx, 'tools')
 
   if (tools && typeof tools.register === 'function') {
     ctx.effect(() => {
@@ -279,7 +328,9 @@ export function apply(ctx, rawConfig = {}) {
     }
   }
 
-  const webServer = ctx.webServer ?? ctx.get?.('webServer')
+  // webServer 写在 inject 里，正常一定拿得到；但仍走同一条安全路径，
+  // 免得将来有人把它从 inject 里去掉时又踩一次「未 inject 即抛错」。
+  const webServer = optionalService(ctx, 'webServer')
 
   function register(route) {
     return typeof webServer.register === 'function' ? webServer.register(route) : undefined

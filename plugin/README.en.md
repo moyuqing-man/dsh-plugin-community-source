@@ -5,13 +5,18 @@ GitHub Issues into a bug-report inbox, and stars into a rating.
 
 > 中文版见 [README.md](./README.md)。
 
-> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete and all 153 tests pass, but
-> three things have **not been verified in a real environment yet**: the tool cards (they need a real DSH
-> with this plugin installed), the `dsh.so` / `dsh.works` / Lanshu index sources (unreachable from the
-> development machine, so only their parsing logic was tested against offline fixtures), and the actual
-> npm packing result. Sign-in additionally requires you to register your own GitHub OAuth App and put its
-> Client ID into the config. Fine to evaluate and play with; **not recommended for anything that depends
-> on it yet**.
+> ⚠️ **This is a demo (0.1.0), not a stable release.** The code is complete, all 207 tests pass, and the
+> plugin **has now actually been loaded by DSH** — installed from a real tarball into a throwaway profile
+> with `dsh plugin add` and booted, after which `/community` and `/api/v1/community/meta` both returned 200.
+> That one real-hardware run caught two bugs that the local tests were **structurally incapable of finding**;
+> see the "real-hardware verification" section below. Still **unverified**:
+> (1) the client half mounted in a real UI (the sidebar entry, the main panel and the four tool cards all
+> need a human to open them), (2) the `dsh.so` / `dsh.works` / Lanshu index sources (unreachable from the
+> development machine, so only their parsing logic was tested against offline fixtures), and (3) the actual
+> npm publish (packing is verified down to a real tgz from `pnpm pack`; one `pnpm publish` remains).
+> Sign-in additionally requires you to register your own GitHub OAuth App and put its Client ID into the
+> config. Fine to evaluate and play with; **not recommended for anything that depends on it yet**.
+
 
 This package has **two halves**:
 
@@ -303,10 +308,49 @@ A few deliberate decisions:
 
 ---
 
+## Real-hardware verification (2026-10-14 — it caught two real bugs)
+
+This plugin **has now been loaded by an actual DSH process**. The run happens in a **throwaway profile**,
+leaving the one you actually use untouched (`DSH_HOME` points at a temp directory; deleting it rolls
+everything back):
+
+```cmd
+set DSH_HOME=%TEMP%\dcom-dsh-home
+dsh plugin --profile min add file:<project>\plugin\dsh-plugin-community-0.1.0.tgz
+dsh --profile min --port 3305 --no-open
+curl http://127.0.0.1:3305/community                 :: expect 200
+curl http://127.0.0.1:3305/api/v1/community/meta     :: expect 200
+```
+
+**The first boot failed, and it failed quietly**: the startup log held a single line,
+`warning: 1 entry did not activate`, and both routes returned 404 — while back in the repository all 202
+tests were green, `pack-check.mjs` passed and so did `verify-tarball.mjs`. Both root causes were confirmed
+by extracting the loader source out of `app.asar` rather than guessing:
+
+| # | Root cause | Real-hardware symptom | Fix |
+|---|---|---|---|
+| 1 | `Config` was not a [Standard Schema](https://standardschema.dev) | before mounting, cordis calls `Config['~standard'].validate(config)`; on a plain object that throws `TypeError: Cannot read properties of undefined (reading 'validate')` and the plugin **silently fails to activate** | give `Config` a **non-enumerable** `~standard = { version: 1, vendor, validate }` (10 hand-written lines, no schemastery) |
+| 2 | reading a service **not listed in `inject`** via `ctx.xxx ?? null` | cordis's `ctx` is a Proxy whose `get` trap **throws** for any uninjected property: `cannot get property "X" without inject` | route every optional lookup through `optionalService(ctx, name)`: `ctx.get(name)` first, property access only as a fallback inside try/catch |
+
+After the fix: `/community` → **200** (33,229 bytes, no `<script>`) and `/api/v1/community/meta` → **200**,
+with zero warnings on boot.
+
+**Why the local tests could never catch either one**: the fake `ctx` is a plain object (it never throws),
+and `apply()` is called directly (it never goes through the loader's config parsing). So alongside the
+code fixes, **the guards themselves** were upgraded:
+
+- `scripts/verify-tarball.mjs` now checks `Config['~standard']` (including "junk config must not throw"
+  and "must stay non-enumerable"), and it checks it **on the extracted copy** — that is what actually ships.
+  Its fake `ctx` is now a **Proxy that throws for uninjected plain properties**, matching real cordis.
+- `test/guards.test.mjs` proves those two guards bite, using **mutation testing**: it puts both bugs back
+  and asserts the guards fire. A guard that only ever passes is decoration, not a guard.
+
+---
+
 ## Development
 
 ```bash
-node --test "test/*.test.mjs"           # 202 tests
+node --test "test/*.test.mjs"           # 207 tests
 node scripts/pack-check.mjs             # pre-publish check: pack list + relative-import graph + manifest fields
 node scripts/verify-tarball.mjs [tgz]   # stronger: unpack a real tgz and actually import + apply it once
 ```
@@ -337,7 +381,7 @@ always in the package), and **tarball verification** (parsing `cordis.patch.yml`
 boolean types / every parsed key must match a `Config` key in `lib/index.js` / the workspace imports
 and applies, registering 4 routes and 4 tools).
 
-**202 tests** in total.
+**207 tests** in total.
 
 Every index source's `parse()` is a pure function tested against offline fixtures — no network needed.
 The client half is tested by swapping `globalThis.window.__ModuleLoader__` and capturing the bundle,

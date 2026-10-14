@@ -137,13 +137,31 @@ export async function loadHostHalf(pkgDir, overrides) {
   const modulePath = join(pkgDir, 'lib', 'index.js')
   const mod = await import(pathToFileURL(modulePath).href)
 
+  /*
+   * 把假 ctx 包成 **Proxy，对未知的普通属性一律抛错** —— 这是刻意的。
+   *
+   * 真实 cordis 的 ctx 就是这样的（app.asar 内 @deepseek-ai/cordis/lib/index.js:676
+   * 的 get 陷阱：`cannot get property "X" without inject`）。如果这里给的是个
+   * 宽容的普通对象，那么 `ctx.credentials ?? null` 这种写法在本脚本里**永远是
+   * null**、看着像正常，装到真机上却直接抛异常、整个插件不激活。
+   *
+   * 实测抓到过：这个脚本当初正是用宽容对象，所以「插件从未被加载过」的 bug
+   * 一路藏到了真机启动才暴露。
+   */
+  const guarded = new Proxy(ctx, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'symbol' || prop in target) return Reflect.get(target, prop, receiver)
+      throw new Error(`cannot get property "${String(prop)}" without inject`)
+    },
+  })
+
   // 注意：`Config` 是**默认值对象**（`export const Config = { owner, repo, ... }`），
   // 不是 Schemastery 的构造函数 —— `new mod.Config()` 会 TypeError。
   // host 半边真正接受的是「原始配置对象」，缺的键由内部 normalizeConfig 补默认。
-  const result = await mod.apply(ctx, { ...(overrides ?? {}) })
+  const result = await mod.apply(guarded, { ...(overrides ?? {}) })
 
   // 有 webServer 时 apply 会返回暴露面；没有时返回 undefined 也是合法的。
-  return { mod, registered, logs, result, ctx }
+  return { mod, registered, logs, result, ctx: guarded }
 }
 
 /* -------------------------- cordis.patch.yml 校验 -------------------------- */
@@ -332,6 +350,52 @@ async function main() {
 
       if (typeof mod.apply !== 'function') problems.push('host 半边没有导出 apply')
       if (!Array.isArray(mod.inject)) problems.push('host 半边没有导出 inject 数组')
+
+      /*
+       * Standard Schema 契约 —— **这条是真机跑出来的 bug 的守门人**。
+       *
+       * 真实 cordis 加载器挂载前会调 `mod.Config['~standard'].validate(config)`
+       * （app.asar 内 @deepseek-ai/cordis/lib/index.js 的 resolveConfig）。
+       * `Config` 只是普通对象时这一句抛
+       *     TypeError: Cannot read properties of undefined (reading 'validate')
+       * 整个插件**静默不激活**：启动日志只有 `warning: 1 entry did not activate`，
+       * 所有页面 404，而仓库里的测试全绿。
+       *
+       * 为什么必须在这里查、而不是只在 src 上查：这里 import 的是**解包出来的
+       * 那份副本** —— 它才是要发出去的东西。（实测确实抓到过：src 里补了
+       * `~standard` 但打出来的包里没有，因为发布前忘了重新 pack。）
+       */
+      const standard = mod.Config && mod.Config['~standard']
+      if (!standard) {
+        problems.push(
+          "解包副本的 Config 上没有 '~standard'：真实加载器读 .validate 时会抛 TypeError，插件静默不激活",
+        )
+      } else {
+        if (standard.version !== 1) problems.push(`Config['~standard'].version 应为 1，实际 ${standard.version}`)
+        if (typeof standard.validate !== 'function') {
+          problems.push("Config['~standard'].validate 不是函数")
+        } else {
+          // 垃圾配置不能抛 —— 配置写错一个字段不该让整个插件加载失败
+          for (const bad of [undefined, null, 'nope', 42]) {
+            let outcome
+            try {
+              outcome = standard.validate(bad)
+            } catch (error) {
+              problems.push(`Config['~standard'].validate(${JSON.stringify(bad)}) 抛了错：${error?.message ?? error}`)
+              continue
+            }
+            if (!outcome || typeof outcome !== 'object' || !outcome.value) {
+              problems.push(`Config['~standard'].validate(${JSON.stringify(bad)}) 没返回 { value }`)
+            } else if (typeof outcome.value.owner !== 'string' || outcome.value.owner === '') {
+              problems.push(`Config['~standard'].validate(${JSON.stringify(bad)}) 没退化成默认值（owner 为空）`)
+            }
+          }
+        }
+        if (Object.keys(mod.Config).includes('~standard')) {
+          problems.push("Config['~standard'] 必须是非枚举属性，否则会被当成一个配置键")
+        }
+        console.log(`Config['~standard'] 就位（version ${standard.version}，非枚举）`)
+      }
 
       // 路由：预期 4 条（两个前缀 + 两个 exact）
       const paths = registered.routes.map((route) => route.path).filter(Boolean)

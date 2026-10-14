@@ -4,11 +4,16 @@
 
 > English version: [README.en.md](./README.en.md)
 
-> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、153 个测试全绿，但有三处**还没在真实环境里验证过**：
-> 工具卡片（需要一台装了本插件的 DSH 真机跑一次）、`dsh.so` / `dsh.works` / 岚叔目录三个索引源
-> （开发机连不上它们，只用离线 fixture 测过解析逻辑）、以及 npm 上的真实打包结果。
+> ⚠️ **这是一个 demo（0.1.0），不是稳定版。** 代码写完了、207 个测试全绿，**并且已经真的被 DSH 装载过**
+> （在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与
+> `/api/v1/community/meta` 都返回 200）—— 这一轮真机验证抓出了两个本地测试**结构上不可能发现**的
+> bug，详见下文「真机验证」一节。仍然**没验证过**的是：
+> ① client 半边在真实界面里的挂载（侧栏图标 / 主面板 / 四个工具卡片都要有人在界面上点开看），
+> ② `dsh.so` / `dsh.works` / 岚叔目录三个索引源（开发机连不上它们，只用离线 fixture 测过解析逻辑），
+> ③ npm 上的真实发布结果（打包已验证到 `pnpm pack` 产出的真实 tgz，差一次 `pnpm publish`）。
 > 登录功能还需要你自己申请一个 GitHub OAuth App、把 Client ID 填进配置才能用。
 > 适合评估与试玩，**不建议现在就拿去撑依赖它的流程**。
+
 
 这个包有**两个半边**：
 
@@ -266,10 +271,46 @@ ALLOW_REMOTE=1 PORT=3221 node scripts/preview.mjs
 
 ---
 
+## 真机验证（2026-10-14，抓出两个真 bug）
+
+这个插件**已经真的被一个 DSH 进程装载过**。做法是在**隔离的临时 profile** 里做，
+不动你在用的那个（`DSH_HOME` 指到临时目录，删掉即完全回滚）：
+
+```cmd
+set DSH_HOME=%TEMP%\dcom-dsh-home
+dsh plugin --profile min add file:<项目路径>\plugin\dsh-plugin-community-0.1.0.tgz
+dsh --profile min --port 3305 --no-open
+curl http://127.0.0.1:3305/community                 :: 期望 200
+curl http://127.0.0.1:3305/api/v1/community/meta     :: 期望 200
+```
+
+**第一次启动是失败的**，而且失败得很安静：启动日志只有一行 `warning: 1 entry did not activate`，
+两个路由都是 404 —— 而当时仓库里 202 个测试全绿、`pack-check.mjs` 通过、`verify-tarball.mjs` 也通过。
+两个根因都是从 `app.asar` 里抽源码取证确认的，不是靠猜：
+
+| # | 根因 | 真机症状 | 修法 |
+|---|---|---|---|
+| 1 | `Config` 不是 [Standard Schema](https://standardschema.dev) | cordis 挂载前调 `Config['~standard'].validate(config)`，`Config` 是普通对象就抛 `TypeError: Cannot read properties of undefined (reading 'validate')`，插件**静默不激活** | 给 `Config` 加**非枚举**的 `~standard = { version: 1, vendor, validate }`（手写 10 行，不引 schemastery） |
+| 2 | 用 `ctx.xxx ?? null` 读**没写进 `inject`** 的服务 | cordis 的 `ctx` 是 Proxy，get 陷阱对未 inject 的属性**一律抛** `cannot get property "X" without inject` | 统一走 `optionalService(ctx, name)`：`ctx.get(name)` 优先，属性访问只作兜底且包在 try/catch 里 |
+
+修完复测：`/community` → **200**（33229 字节、无 `<script>`）、`/api/v1/community/meta` → **200**，
+启动日志零告警。
+
+**为什么本地测试永远抓不到这两条**：假 `ctx` 是普通对象（不会抛错），而 `apply()` 是被直接调用的
+（不经过加载器的配置解析）。所以修完代码之后，**守卫本身**也一起升级了：
+
+- `scripts/verify-tarball.mjs` 现在会检查 `Config['~standard']`（含「垃圾配置不能抛」
+  与「必须非枚举」两条），而且是在**解包出来的副本**上查 —— 它才是要发出去的东西；
+  假 `ctx` 也改成了 **Proxy，对未 inject 的普通属性抛错**，与真 cordis 行为一致。
+- `test/guards.test.mjs` 用**变异测试**证明上面两条守卫真的有牙：把两个 bug 人为还原回去，
+  断言守卫确实报警。只验证通过路径的守卫是装饰，不是守卫。
+
+---
+
 ## 开发
 
 ```bash
-node --test "test/*.test.mjs"           # 202 个测试
+node --test "test/*.test.mjs"           # 207 个测试
 node scripts/pack-check.mjs             # 发布前自检：打包清单 + 相对 import 图 + 清单字段
 node scripts/verify-tarball.mjs [tgz]   # 更强的一步：从真实 tgz 解包并真的 import + apply 一次
 ```
@@ -296,7 +337,7 @@ GraphQL 藏在 200 里的错误）、Device Flow（验证码不外泄 / 冷启�
 块序列与布尔类型 / 解析出的键必须与 `lib/index.js` 的 `Config` 对得上 /
 从工作区能 import + apply 并注册出 4 条路由与 4 个工具）。
 
-一共 **202 个测试**。
+一共 **207 个测试**。
 
 索引源的 `parse()` 都是纯函数，用离线 fixture 测，不需要联网。
 client 半边的测试通过替换 `globalThis.window.__ModuleLoader__` 把 bundle 截下来跑，**也不需要浏览器**。
