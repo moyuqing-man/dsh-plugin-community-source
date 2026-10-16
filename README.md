@@ -1,12 +1,14 @@
 # DSH 插件社区 · 方案文档
 
+注意，该项目由ai进行开发，但是功能没问题，试手作品
+
 > 一句话：**市场已经过剩，社区还是空的。**
 > 本方案不做第 N 个插件市场，而做**市场之上的那一层**——讨论、信任、沉淀与协作。
 > 社区本身是一个 DSH 插件，但它的本质是**一个「联合其他插件的联合插件」**：不重复收录，只桥接与组织。
 
 > **仓库**：源码与这 8 份方案文档 → `moyuqing-man/dsh-plugin-community-source`（本地就是这个目录）；社区仓库（Discussions 分类 / Issue 与讨论表单 / 行为准则）→ `moyuqing-man/dsh-plugin-community`（本地是 [`m0/community-repo/`](m0/community-repo/README.md)）。两个仓库各自独立推送。
 
-> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 插件本体代码已写完、221 个测试全绿，打包路径真机走通了（`pnpm pack` → 真实 tgz → 解包后 import + apply 成功，4 条路由与 4 个 Agent 工具都注册得上），**并且已经真的被 DSH 装载起来过**——在隔离的临时 profile 里 `dsh plugin add` 真实 tarball 后启动，`/community` 与 `/api/v1/community/meta` 都返回 200，启动日志零告警。**它也已经发布到 npm**：[`dsh-plugin-community@0.1.0`](https://www.npmjs.com/package/dsh-plugin-community)，并且实测 `dsh plugin add dsh-plugin-community` 能直接从 registry 装上并启动（同样的 200）。这一轮真机验证抓出了两个本地测试**结构上不可能发现**的 bug（`Config` 必须实现 Standard Schema、`ctx` 是 Proxy 所以未 inject 的服务访问会抛错），已修并加了变异测试守住；随后用岚叔目录的 **655 条真实数据**跑解析器，又抓出 4 个 bug（其中一个判据**反了**，把上游评为最好的条目涂成红线），修正后红线从 528+ 条降到 43 条。详见 [docs/07-路线图与验收.md](docs/07-路线图与验收.md) 第 6、7 条与「诚实保留」第 2 条。仍然**没有在真实环境验证过**的是：① client 半边的**写路径**（面板内发帖 / 评论 / 点赞的提交，需要 GitHub 登录态），② 真机上的工具卡片（要有人在真实会话里跑一次工具调用），③ `dsh.so` 与 `dsh.works` 两个可选索引源（本机连不上，只有岚叔目录连上过）。登录也需要自己配 Client ID。详见 [plugin/README.md](plugin/README.md) 开头的说明。
+> ⚠️ **当前版本是 demo（0.1.0），不是稳定版。** 
 
 ---
 
